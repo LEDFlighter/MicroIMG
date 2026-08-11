@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emerald Engine 25.05 ~ jMX - Bugfree Edition</title>
+    <style>
+        :root {
+            --bg: #0b0f1a; --card-bg: #161b2a; --text: #f0fdf4;
+            --text-muted: #94a3b8; --border: #1e293b; --primary: #10b981;
+            --primary-hover: #34d399; --accent: #059669; --monitor-bg: #000;
+        }
+        [data-theme="light"] {
+            --bg: #f8fafc; --card-bg: #ffffff; --text: #0f172a;
+            --text-muted: #64748b; --border: #e2e8f0; --primary: #059669;
+            --primary-hover: #000; --accent: #34d399; --monitor-bg: #f1f5f9;
+        }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; transition: all 0.3s; }
+        .container { width: 100%; max-width: 1100px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        .card { background: var(--card-bg); padding: 25px; border-radius: 24px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); margin-bottom: 25px; border: 1px solid var(--border); }
+        h2 { margin: 0 0 20px 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px; color: var(--primary); }
+        .grid-layout { display: grid; grid-template-columns: 1fr; gap: 25px; }
+        @media (min-width: 900px) { .grid-layout { grid-template-columns: 450px 1fr; } }
+        .monitor-area { background: var(--monitor-bg); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; align-items: center; border: 2px solid var(--border); margin-top: 15px; }
+        .canvas-container { width: 350px; height: 350px; position: relative; border: 2px solid #333; overflow: hidden; background: #000; cursor: move; display: flex; align-items: center; justify-content: center; border-radius: 12px; touch-action: none; }
+        canvas { width: 100%; height: 100%; image-rendering: pixelated; object-fit: contain; pointer-events: none; }
+        .mode-container { display: flex; background: var(--bg); padding: 4px; border-radius: 14px; border: 1px solid var(--border); margin: 15px 0; gap: 4px; }
+        .mode-btn { flex: 1; border: none; background: transparent; color: var(--text-muted); padding: 10px 5px; border-radius: 10px; cursor: pointer; font-weight: 700; transition: all 0.2s ease; font-size: 0.65rem; }
+        .mode-btn.active { background: var(--primary); color: white; }
+        .stats-display { width: 100%; background: rgba(16, 185, 129, 0.08); padding: 12px; border-radius: 12px; font-family: monospace; font-size: 0.75rem; color: var(--primary); margin-bottom: 15px; border: 1px solid var(--primary); text-align: center; }
+        label { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin: 12px 0 6px 0; display: block; }
+        select, textarea, input[type="file"] { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); outline: none; box-sizing: border-box; font-size: 0.85rem; }
+        .btn-main { border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; color: white; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; margin-top: 10px; font-size: 0.8rem; }
+        .btn-emerald { background: linear-gradient(135deg, var(--primary), var(--accent)); }
+        .btn-clear { display: none; background: linear-gradient(135deg, #ef4444, #b91c1c); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); border: none; }
+        .btn-clear:hover { background: linear-gradient(135deg, #f87171, #ef4444); transform: translateY(-1px); }
+        .chunk-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 20px; width: 100%; }
+        .chunk-card { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-size: 0.7rem; }
+        .accordion-content { max-height: 300px; overflow-y: auto; transition: 0.5s ease; opacity: 1; border: 1px solid #10b98133; border-radius: 8px; }
+        .accordion-content.closed { max-height: 0; opacity: 0; pointer-events: none; border: none; }
+        .toggle-hint { text-align: center; font-size: 0.7rem; color: var(--primary); cursor: pointer; margin-top: 10px; text-decoration: underline; display: none; }
+		frame {
+		touch-action: none;
+		}
+    </style>
+</head>
+<body data-theme="dark">
+
+<div class="container">
+    <div class="header">
+        <h1 style="font-size: 1.1rem; font-weight: 900; margin:0;">EMERALD <span style="color: var(--primary)">ENGINE</span> 25.05 <span style="color: var(--primary)">BUGFREE EDiTiON</span></h1>
+        <button onclick="toggleTheme()" style="background:none; border:none; color:var(--text); cursor:pointer; font-size: 0.7rem; font-weight:bold;">🌓 THEME</button>
+    </div>
+
+    <div class="grid-layout">
+        <div class="left-col">
+            <div class="card">
+                <h2>⚙️ CORE SETTINGS</h2>
+                <label>Bildquelle</label>
+                <input type="file" id="imgInput" accept="image/*">
+                <label>Max. Auflösung (Seitenverhältnis bleibt)</label>
+                <select id="size" onchange="forceUpdate()">
+                    <option value="16">16 × 16</option><option value="32">32 × 32</option>
+                    <option value="48">48 × 48</option><option value="64" selected>64 × 64</option>
+                    <option value="128">128 × 128</option><option value="256">256 × 256</option>
+                    <option value="512">512 × 512</option><option value="1024">1024 × 1024</option>
+                </select>
+                <label>Verfahren</label>
+                <div class="mode-container">
+                    <button class="mode-btn" id="btn-G4" onclick="setMode('G4')">G4-RLE</button>
+                    <button class="mode-btn" id="btn-DEEP" onclick="setMode('DEEP')">DEEP-PX</button>
+                    <button class="mode-btn active" id="btn-ZIP" onclick="setMode('ZIP')">ZIP-ULTRA</button>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="fmt-landscape" class="mode-btn active" style="flex:1; border:1px solid var(--border);" onclick="setOrientation('landscape')">QUER ↔️</button>
+                    <button id="fmt-portrait" class="mode-btn" style="flex:1; border:1px solid var(--border);" onclick="setOrientation('portrait')">HOCH ↕️</button>
+                </div>
+                <label>Zoom & Fokus (Ziehen im Bild)</label>
+                <input type="range" id="zoomSelect" min="100" max="1600" value="100" oninput="forceUpdate()" style="width:100%;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                    <div><label>Farb-Dynamik</label><input type="range" id="tolerance" min="2" max="16" value="16" oninput="forceUpdate()"></div>
+                    <div><label>Kontrast</label><input type="range" id="contrast" min="80" max="400" value="100" oninput="forceUpdate()"></div>
+                </div>
+                <div class="monitor-area">
+                    <div id="liveStats" class="stats-display">Warte auf Bild...</div>
+                    <div class="canvas-container" id="canvasFrame">
+                        <canvas id="mainCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-col">
+            <div class="card">
+                <h2>📦 BATCH & NFC</h2>
+                <label>Ziel Hardware</label>
+                <select id="tagSelect" onchange="forceUpdate()">
+                    <optgroup label="NTAG Serie (Type 2)">
+                        <option value="48">NTAG 210 (48 Byte)</option>
+                        <option value="128">NTAG 212 (128 Byte)</option>
+                        <option value="144">NTAG 213 (144 Byte)</option>
+                        <option value="504">NTAG 215 (504 Byte / Amiibo)</option>
+                        <option value="868" selected>NTAG 216 (868 Byte)</option>
+                    </optgroup>
+                    <optgroup label="MIFARE Ultralight">
+                        <option value="64">Ultralight C (64 Byte)</option>
+                        <option value="192">Ultralight EV1 (192 Byte)</option>
+                    </optgroup>
+                    <optgroup label="MIFARE DESFire (Type 4)">
+                        <option value="2000">DESFire EV1/2/3 2K</option>
+                        <option value="4000">DESFire EV1/2/3 4K</option>
+                        <option value="8000">DESFire EV1/2/3 8K</option>
+                        <option value="16000">DESFire EV1/2/3 16K</option>
+                        <option value="32000">DESFire EV1/2/3 32K</option>
+                    </optgroup>
+                    <optgroup label="Sonstige">
+                        <option value="1024">MIFARE Classic 1K (716 Netto)</option>
+                        <option value="4096">MIFARE Classic 4K</option>
+                        <option value="2000">ICODE SLIX (2K)</option>
+                    </optgroup>
+                </select>
+                <button class="btn-main btn-emerald" onclick="finalizeBatch()">BATCH GENERIEREN</button>
+                <button class="btn-main" style="background: #0ea5e9;" onclick="writeBatchToNfc()">NFC SEQUENCE WRITE 💾</button>
+                <div id="chunksContainer" class="chunk-grid"></div>
+            </div>
+
+            <div class="card">
+                <h2>🔍 RECOVERY</h2>
+                <button class="btn-main" style="background:#334155;" onclick="readFromNfc()">NFC SEQUENCE READ 📡</button>
+                <textarea id="inputRaw" style="margin-top:15px; height:60px;" placeholder="Code Paste..."></textarea>
+                <button class="btn-main btn-emerald" onclick="universalDecode()">START DECODE</button> <button class="btn-main btn-clear" onclick="clearDecode()">CLEAR</button>
+                <div id="rePreview" style="margin-top:20px; text-align:center;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let masterImg = null, currentMode = 'ZIP', currentMaxRes = 64, forcedOrientation = 'landscape';
+let offsetX = 0.5, offsetY = 0.5, isDragging = false, lastX, lastY;
+let activePointers = new Map();
+let startDistance = 0;
+let startZoom = 1;
+let chunkBuffer = {};
+let expectedTotalChunks = 0;
+
+const canvas = document.getElementById('mainCanvas'), ctx = canvas.getContext('2d');
+const frame = document.getElementById('canvasFrame');
+
+function toggleTheme() { document.body.setAttribute('data-theme', document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+function setMode(m) { currentMode = m; document.querySelectorAll('.mode-btn').forEach(b => {if(['btn-G4','btn-DEEP','btn-ZIP'].includes(b.id)) b.classList.toggle('active', b.id==='btn-'+m)}); forceUpdate(); }
+function setOrientation(o) { forcedOrientation = o; document.getElementById('fmt-landscape').classList.toggle('active', o==='landscape'); document.getElementById('fmt-portrait').classList.toggle('active', o==='portrait'); forceUpdate(); }
+function forceUpdate() { currentMaxRes = parseInt(document.getElementById('size').value); updateEngine(); }
+
+frame.onpointerdown = (e) => {
+    isDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    frame.setPointerCapture(e.pointerId);
+};
+
+frame.style.touchAction = "none";
+
+frame.onpointerdown = (e) => {
+    frame.setPointerCapture(e.pointerId);
+    activePointers.set(e.pointerId, e);
+
+    if (activePointers.size === 1) {
+        // Drag Start
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+    }
+
+    if (activePointers.size === 2) {
+        // Pinch Start
+        const pts = Array.from(activePointers.values());
+        startDistance = getDistance(pts[0], pts[1]);
+        startZoom = parseFloat(document.getElementById('zoomSelect').value) / 100;
+        isDragging = false;
+    }
+};
+
+frame.onpointermove = (e) => {
+    if (!masterImg) return;
+
+    if (activePointers.has(e.pointerId)) {
+        activePointers.set(e.pointerId, e);
+    }
+
+    // ----- PINCH -----
+    if (activePointers.size === 2) {
+        const pts = Array.from(activePointers.values());
+        const newDistance = getDistance(pts[0], pts[1]);
+
+        let scale = newDistance / startDistance;
+        let newZoom = startZoom * scale;
+
+        // Begrenzen
+        newZoom = Math.max(0.1, Math.min(20, newZoom));
+
+        document.getElementById('zoomSelect').value = newZoom * 100;
+
+        updateEngine();
+        return;
+    }
+
+    // ----- DRAG -----
+    if (isDragging && activePointers.size === 1) {
+        const zoom = document.getElementById('zoomSelect').value / 100;
+
+        offsetX -= (e.clientX - lastX) / (350 * zoom);
+        offsetY -= (e.clientY - lastY) / (350 * zoom);
+
+        offsetX = Math.max(0, Math.min(1, offsetX));
+        offsetY = Math.max(0, Math.min(1, offsetY));
+
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        updateEngine();
+    }
+};
+
+frame.onpointerup = (e) => {
+    activePointers.delete(e.pointerId);
+    isDragging = false;
+};
+
+document.getElementById('imgInput').onchange = (e) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => { masterImg = new Image(); masterImg.onload = () => updateEngine(); masterImg.src = ev.target.result; };
+    reader.readAsDataURL(e.target.files[0]);
+};
+
+async function updateEngine() {
+    if(!masterImg) return;
+    const levels = +document.getElementById('tolerance').value;
+    const con = +document.getElementById('contrast').value;
+    const zoom = +document.getElementById('zoomSelect').value / 100;
+    const cap = +document.getElementById('tagSelect').value - 15;
+    
+    let ratio = masterImg.width / masterImg.height;
+    let w = (forcedOrientation === 'landscape') ? currentMaxRes : Math.round(currentMaxRes * ratio);
+    let h = (forcedOrientation === 'landscape') ? Math.round(currentMaxRes / ratio) : currentMaxRes;
+    
+    canvas.width = w; canvas.height = h;
+    const sW = masterImg.width / zoom, sH = masterImg.height / zoom;
+    const sX = (masterImg.width * offsetX) - (sW / 2);
+    const sY = (masterImg.height * offsetY) - (sH / 2);
+
+    ctx.clearRect(0,0,w,h);
+    ctx.filter = `contrast(${con}%) grayscale(100%)`;
+    ctx.drawImage(masterImg, sX, sY, sW, sH, 0, 0, w, h);
+    
+    const imgData = ctx.getImageData(0,0,w,h), d = imgData.data;
+    let pixels = [];
+    const step = 255 / (levels - 1); 
+    
+    for (let i = 0; i < d.length; i += 4) {
+        let avg = (d[i] + d[i+1] + d[i+2]) / 3;
+        let level = Math.round(avg / step);
+        d[i] = d[i+1] = d[i+2] = Math.round(level * step);
+        pixels.push(level);
+    }
+    ctx.putImageData(imgData,0,0);
+    
+    let code = "";
+    if(currentMode === 'ZIP') {
+        const compressed = await compressData(`W${w}H${h}:${encodeRLE_Raw(pixels)}`);
+        code = `ZIP:${compressed}`;
+    } else if(currentMode === 'G4') {
+        code = `G4:W${w}H${h}:${encodeRLE_Raw(pixels)}`;
+    } else {
+        code = `DP:W${w}H${h}:${pixels.map(x=>x.toString(16)).join('').toUpperCase()}`;
+    }
+
+    const numTags = Math.ceil(code.length / cap);
+    const tagText = numTags === 1 ? "TAG" : "TAGS";
+    
+    // Dynamische Farbe: Von Grün (120°) zu Rot (0°)
+    // Je mehr Tags, desto niedriger der Hue-Wert
+    const hue = Math.max(0, 140 - (numTags * 15)); 
+    const statsColor = `hsl(${hue}, 80%, 50%)`;
+
+    document.getElementById('liveStats').innerHTML = `
+        <b>${w}x${h}px</b> | ${code.length} B | 
+        <span style="color: ${statsColor}; font-weight: 900; transition: color 0.3s;">
+            ${numTags} ${tagText}
+        </span>`;
+    return code;
+}
+function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            //alert("Kopiert! 📋");
+        }).catch(err => fallbackCopy(text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function getDistance(p1, p2) {
+    const dx = p2.clientX - p1.clientX;
+    const dy = p2.clientY - p1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function fallbackCopy(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed"; // Verhindert Scrolling
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        //alert("Kopiert! (Fallback) 📋");
+    } catch (err) {
+        console.error('Kopieren fehlgeschlagen', err);
+    }
+    document.body.removeChild(textArea);
+}
+
+function clearDecode() {
+const input = document.getElementById('inputRaw');
+    if (input) input.value = "";
+
+    const preview = document.getElementById('rePreview');
+    if (preview) preview.innerHTML = '';
+
+    // NEU: Clear-Button wieder verstecken
+    const clearBtn = document.querySelector('.btn-clear');
+    if (clearBtn) clearBtn.style.display = "none";
+    
+    console.log("Recovery-Bereich wurde erfolgreich genullt! 🧹✨");
+}
+
+function encodeRLE_Raw(p) {
+    let res = "";
+    for (let i=0; i<p.length; i++) {
+        let c=1; while(i+1<p.length && p[i+1]===p[i] && c<15) { c++; i++; }
+        res += c.toString(16).toUpperCase() + p[i].toString(16).toUpperCase();
+    }
+    return res;
+}
+
+async function compressData(str) {
+    const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('deflate'));
+    const res = await new Response(stream).arrayBuffer();
+    return btoa(String.fromCharCode(...new Uint8Array(res)));
+}
+
+async function decompressData(b64) {
+    const bin = atob(b64), uint = new Uint8Array(bin.length);
+    for(let i=0; i<bin.length; i++) uint[i] = bin.charCodeAt(i);
+    const stream = new Blob([uint]).stream().pipeThrough(new DecompressionStream('deflate'));
+    return await new Response(stream).text();
+}
+
+async function finalizeBatch() {
+    const code = await updateEngine();
+    const cap = +document.getElementById('tagSelect').value - 15;
+    const container = document.getElementById('chunksContainer');
+    container.innerHTML = "";
+    
+    const numTags = Math.ceil(code.length / cap);
+    let allChunksText = ""; 
+
+    // Sammle vorab alle Chunks
+    for (let j = 0, i = 1; j < code.length; j += cap, i++) {
+        allChunksText += `P${i}/${numTags}#${code.substring(j, j + cap)}\n`;
+    }
+
+    // Wenn mehr als ein Tag da ist, zeige den "TRANSFUSE" Button
+    if (numTags > 1) {
+        const copyAllBtn = document.createElement('button');
+        copyAllBtn.className = "btn-main";
+        copyAllBtn.style.background = "linear-gradient(135deg, #3b82f6, #2563eb)";
+        copyAllBtn.style.marginBottom = "15px";
+        copyAllBtn.innerHTML = "📋 ALL CHUNKS TO DECODE & COPY";
+        
+        copyAllBtn.onclick = () => {
+            copyToClipboard(allChunksText.trim());
+            document.getElementById('inputRaw').value = null;
+            document.getElementById('inputRaw').value = allChunksText.trim();
+            
+            // Harmonika schließen
+            const wrapper = document.getElementById('accordionWrapper');
+            wrapper.classList.add('closed');
+            document.getElementById('toggleHint').style.display = "block";
+            
+            //alert("Daten transferiert & Harmonika geschlossen! 🍏");
+        };
+        container.appendChild(copyAllBtn);
+    }
+
+    // Erstelle den Wrapper für die Harmonika
+    const accordionWrapper = document.createElement('div');
+    accordionWrapper.id = "accordionWrapper";
+    accordionWrapper.className = "accordion-content";
+    
+    // Die einzelnen Karten in den Wrapper legen
+    for (let j = 0, i = 1; j < code.length; j += cap, i++) {
+        let c = code.substring(j, j + cap);
+        let chunkData = `P${i}/${numTags}#${c}`;
+        
+        accordionWrapper.innerHTML += `
+            <div class="chunk-card">
+                <div style="display:flex; justify-content:space-between; color:var(--primary); margin-bottom:5px;">
+                    <span>TAG ${i}/${numTags}</span>
+                    <button onclick="copyToClipboard('${chunkData}')" style="font-size:0.6rem; cursor:pointer; background:var(--primary); border:none; color:white; border-radius:4px; padding:2px 6px;">COPY</button>
+                </div>
+                <div style="font-family:monospace; font-size:0.55rem; word-break:break-all; opacity:0.7;">${chunkData}</div>
+            </div>`;
+    }
+    
+    container.appendChild(accordionWrapper);
+
+    // Toggle-Link zum Wiederöffnen
+    const toggleHint = document.createElement('div');
+    toggleHint.id = "toggleHint";
+    toggleHint.className = "toggle-hint";
+    toggleHint.innerHTML = "Chunks wieder anzeigen...";
+    toggleHint.onclick = () => {
+        accordionWrapper.classList.toggle('closed');
+        toggleHint.innerHTML = accordionWrapper.classList.contains('closed') ? "Chunks wieder anzeigen..." : "Chunks einklappen...";
+    };
+    container.appendChild(toggleHint);
+}
+
+async function writeBatchToNfc() { 
+    const code = await updateEngine(); 
+    const cap = +document.getElementById('tagSelect').value - 15; 
+    
+    // 1. Chunks exakt wie bisher zusammenbauen (inklusive Header)
+    let chunks = []; 
+    const totalChunks = Math.ceil(code.length / cap);
+    
+    for (let j = 0, i = 0; j < code.length; j += cap, i++) { 
+        const chunkData = code.substring(j, j + cap);
+        chunks.push(`P${i + 1}/${totalChunks}#${chunkData}`); 
+    } 
+
+    if (chunks.length === 0) {
+        alert("Keine Daten zum Schreiben vorhanden!");
+        return;
+    }
+
+    // 2. An den lokalen Python-Server übergeben
+    try { 
+        alert(`Schreibvorgang für ${chunks.length} Tag(s) gestartet.\n\nBitte achte auf die Ausgaben im Python-Terminal!`); 
+
+        const response = await fetch('http://127.0.0.1:5000/write-chunks', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ chunks: chunks })
+		});
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert("✨ Erfolgreich auf alle NFC-Tags geschrieben!"); 
+        } else {
+            alert(`❌ NFC Schreibfehler: ${result.error}`);
+        }
+    } catch (e) { 
+        alert("❌ Fehler: Konnte keine Verbindung zum Python-Server herstellen. Läuft das Skript auf Port 5000?"); 
+    } 
+}
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function readFromNfc() {  
+    if (window.AndroidNfc && typeof window.AndroidNfc.readChunk === 'function') {  
+        window.AndroidNfc.readChunk();  
+        return;  
+    }  
+ 
+    let isScanning = true;  
+    let waitingForTagRemoval = false; // Sperre: Warten auf Abnehmen des Tags 
+    let lastSeenPayload = ""; 
+ 
+    alert("🔄 Auto-Scan gestartet! Leg den ERSTEN NFC-Tag auf den Reader.");  
+ 
+    while (isScanning) {  
+        try {  
+            // ------------------------------------------------------------- 
+            // FALL A: SPERRE AKTIV -> Wir prüfen NUR, ob der Tag entfernt wurde!
+            // Es werden KEINE Pages gelesen -> Python bleibt komplett ruhig im Terminal!
+            // ------------------------------------------------------------- 
+            if (waitingForTagRemoval) {
+                const checkResp = await fetch('http://127.0.0.1:5000/check-tag');
+                const checkResult = await checkResp.json();
+
+                if (!checkResult.present) {
+                    // Tag wurde physisch abgenommen!
+                    waitingForTagRemoval = false; 
+                    lastSeenPayload = ""; 
+                    console.log("↔️ Tag wurde entfernt. Bereit für den NÄCHSTEN Tag!"); 
+                }
+
+                // Solange der Tag noch aufliegt, warten wir einfach ab (kein Auslesen von Nutzdaten!)
+                await delay(300); 
+                continue; 
+            }
+
+            // ------------------------------------------------------------- 
+            // FALL B: BEREIT ZUM LESEN -> Wir fordern den nächsten Chunk an!
+            // ------------------------------------------------------------- 
+            const response = await fetch('http://127.0.0.1:5000/read-chunk');  
+            const result = await response.json();  
+
+            // Kein Tag da oder ungültige Antwort
+            if (!result.success || !result.data || result.data.trim() === "") { 
+                await delay(300);  
+                continue;  
+            } 
+ 
+            const rawChunkText = result.data.trim();  
+
+            // Validierung des Emerald-Formats
+            if (!rawChunkText.startsWith('P') || !rawChunkText.includes('#')) {  
+                await delay(300);  
+                continue;  
+            }  
+ 
+            const hashIndex = rawChunkText.indexOf('#');  
+            const header = rawChunkText.substring(0, hashIndex);  
+            const match = header.match(/^P(\d+)\/(\d+)$/);  
+ 
+            if (match) {  
+                const currentIndex = parseInt(match[1], 10);  
+                const totalChunks = parseInt(match[2], 10);  
+ 
+                // Bei neuem Scan-Durchlauf Buffer initialisieren 
+                if (expectedTotalChunks === 0 || expectedTotalChunks !== totalChunks) {  
+                    chunkBuffer = {};  
+                    expectedTotalChunks = totalChunks;  
+                }  
+ 
+                // Chunk nur im Puffer ablegen, wenn er noch fehlt 
+                if (!chunkBuffer[currentIndex]) { 
+                    if (currentIndex === 1) {  
+                        chunkBuffer[1] = rawChunkText; // Behält P1/X# 
+                    } else {  
+                        chunkBuffer[currentIndex] = rawChunkText.substring(hashIndex + 1);  
+                    }  
+                    console.log(`✅ Chunk ${currentIndex}/${totalChunks} erfolgreich erfasst!`); 
+                } else { 
+                    console.log(`ℹ️ Chunk ${currentIndex} liegt bereits im Puffer.`); 
+                } 
+ 
+                // Chunk verarbeitet -> LESEN PAUSIEREN & SPERRE AKTIVIEREN!
+                lastSeenPayload = rawChunkText; 
+                waitingForTagRemoval = true; 
+ 
+                const loadedCount = Object.keys(chunkBuffer).length;  
+ 
+                // PRÜFUNG: Haben wir alle Chunks beisammen? 
+                if (loadedCount === totalChunks) {  
+                    console.log("🎉 ALLE CHUNKS VOLLSTÄNDIG! Schleife wird beendet..."); 
+                    isScanning = false; // Stoppt die while-Schleife sofort! 
+                } else {  
+                    let nextMissing = 1;  
+                    for (let i = 1; i <= totalChunks; i++) {  
+                        if (!chunkBuffer[i]) { nextMissing = i; break; }  
+                    } 
+                    console.log(`🛑 Bitte Tag JETZT entfernen und Chunk ${nextMissing} auflegen.`);  
+                }  
+            }  
+        } catch (e) {  
+            console.error("Fehler bei Verbindungsabfrage:", e);  
+            await delay(800);  
+        }  
+ 
+        await delay(300);  
+    }  
+ 
+    // ============================================================= 
+    // SCHLEIFE BEENDET -> DECODER AUFRUFEN 
+    // ============================================================= 
+    console.log("🚀 Füge Chunks zusammen..."); 
+    let combinedPayload = "";  
+    for (let i = 1; i <= expectedTotalChunks; i++) {  
+        if (chunkBuffer[i]) { 
+            combinedPayload += chunkBuffer[i];  
+        } 
+    }  
+ 
+    const inputField = document.getElementById('inputRaw');  
+    if (inputField) {  
+        inputField.value = combinedPayload;  
+    }  
+ 
+    // Speicher leeren 
+    chunkBuffer = {};  
+    expectedTotalChunks = 0;  
+ 
+    console.log("✨ Starte universalDecode()..."); 
+    if (typeof universalDecode === 'function') {  
+        universalDecode();  
+    } else { 
+        console.error("❌ universalDecode() wurde nicht gefunden!"); 
+    } 
+}
+
+async function universalDecode() {
+    let rawArea = document.getElementById('inputRaw').value.trim();
+
+    // --- CHECK: Erster Chunk vorhanden? ---
+    // Wir prüfen, ob der Input mit "P1/" beginnt.
+    if (!rawArea.startsWith("P1/")) {
+        alert("🚨 Wichtiger erster Chunk fehlt! Die Dekodierung muss mit P1/X# beginnen.");
+        return;
+    }
+
+    // 1. SCHRITT: Den Datenmüll restlos entfernen
+    let cleanData = rawArea.replace(/P\d+\/\d+#/g, "").replace(/\s/g, "");
+
+    try {
+        let content = cleanData;
+        
+        // 2. SCHRITT: ZIP-Extraktion
+        if(cleanData.includes("ZIP:")) {
+            const zipBody = cleanData.split("ZIP:")[1];
+            content = await decompressData(zipBody);
+        }
+        
+        // 3. SCHRITT: Metadaten (W/H)
+        const parts = content.split(':');
+        const metaPart = parts.find(p => p.includes('W') && p.includes('H'));
+        if (!metaPart) throw new Error("Keine Metadaten im Chunk-Stream gefunden.");
+
+        const w = parseInt(metaPart.match(/W(\d+)/)[1]);
+        const h = parseInt(metaPart.match(/H(\d+)/)[1]);
+        const data = parts[parts.length - 1]; 
+        
+        const cv = document.createElement('canvas'); 
+        cv.width = w; cv.height = h;
+        const cx = cv.getContext('2d');
+        const img = cx.createImageData(w, h);
+        let px = [];
+
+        // 4. SCHRITT: Dekodierung (RLE oder Plain)
+        if(cleanData.includes("ZIP:") || content.includes("G4")) {
+            for(let i = 0; i < data.length; i += 2) {
+                let c = parseInt(data[i], 16); 
+                let v = parseInt(data[i+1], 16);
+                if(!isNaN(c) && !isNaN(v)) {
+                    for(let k = 0; k < c; k++) px.push(v);
+                }
+            }
+        } else {
+            for(let i = 0; i < data.length; i++) {
+                let v = parseInt(data[i], 16);
+                if(!isNaN(v)) px.push(v);
+            }
+        }
+        
+        // 5. SCHRITT: AUTO-BRIGHTNESS & RENDER
+        const maxLevel = px.length > 0 ? Math.max(...px) : 0; 
+        const lumaFactor = maxLevel > 0 ? (255 / maxLevel) : 255;
+
+        for(let j = 0; j < px.length && j < w * h; j++) {
+            let idx = j * 4;
+            let v = Math.round(px[j] * lumaFactor);
+            img.data[idx] = img.data[idx+1] = img.data[idx+2] = v; 
+            img.data[idx+3] = 255;
+        }
+        
+        cx.putImageData(img, 0, 0);
+        
+        // --- PREVIEW --- 
+const previewZone = document.getElementById('rePreview'); 
+previewZone.innerHTML = `<h4>✨ jMX REKONSTRUKTION ERFOLGREICH (${w}x${h})</h4>`; 
+
+cv.style.cssText = "width:100%; max-width:350px; image-rendering:pixelated; border-radius:12px; display:block; margin:0 auto 15px auto;"; 
+previewZone.appendChild(cv); 
+
+const dlBtn = document.createElement('button'); 
+dlBtn.className = "btn-main btn-emerald"; 
+dlBtn.innerHTML = "💾 BILD SPEICHERN (JPG)"; 
+
+dlBtn.onclick = () => { 
+    // Skalierungsfaktor abfragen (1x = Originalgröße, 2x, 4x, 8x, etc.) 
+    const scaleChoice = prompt("In welcher Skalierung möchtest du das Bild speichern?\n\n1 = Originalgröße (" + w + "x" + h + ")\n2 = 2x (" + (w*2) + "x" + (h*2) + ")\n4 = 4x (" + (w*4) + "x" + (h*4) + ")\n8 = 8x (" + (w*8) + "x" + (h*8) + ")", "4"); 
+
+    if (scaleChoice === null) return; // Abbrechen, wenn der User den Dialog schließt 
+
+    const scale = parseInt(scaleChoice, 10); 
+    const validScale = (!isNaN(scale) && scale > 0) ? scale : 1; 
+
+    // Temporäres Canvas für den hochskalierten Export erstellen 
+    const exportCv = document.createElement('canvas'); 
+    exportCv.width = w * validScale; 
+    exportCv.height = h * validScale; 
+    const ctx = exportCv.getContext('2d'); 
+
+    // WICHTIG: Pixelated Rendering für scharfe Kanten erzwingen 
+    ctx.imageSmoothingEnabled = false; 
+    ctx.webkitImageSmoothingEnabled = false; 
+    ctx.mozImageSmoothingEnabled = false; 
+
+    // Das Original-Canvas vergrößert auf das Export-Canvas zeichnen 
+    ctx.drawImage(cv, 0, 0, exportCv.width, exportCv.height); 
+
+    // Download ausführen 
+    const link = document.createElement('a');  
+    link.download = `jMX_Decode_${validScale}x_${Date.now()}.jpg`;  
+    link.href = exportCv.toDataURL("image/jpeg", 0.95);  
+    link.click();  
+}; 
+
+previewZone.appendChild(dlBtn);
+
+        // CLEAR-BUTTON ANZEIGEN
+        const clearBtn = document.querySelector('.btn-clear');
+        if (clearBtn) clearBtn.style.display = "inline-block";
+        
+    } catch(e) { 
+        console.error("Decode Error:", e);
+        alert("Fehler: Daten unvollständig oder Header korrupt."); 
+    }
+}
+</script>
+</body>
+</html>
