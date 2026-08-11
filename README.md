@@ -72,4 +72,4 @@ Die Daten werden nach folgendem Muster auf $N$ Tags verteilt:
 * **Tag 2:** `P2/3#...` *(Nutzdaten-Chunk 2)*
 * **Tag 3:** `P3/3#...` *(Nutzdaten-Chunk 3)*
 
-Beim Einlesevorgang entfernt MicroIMG die Folge-Header automatisch und fügt die Fragmente im Speicher z
+Beim Einlesevorgang entfernt MicroIMG die Folge-Header automatisch und fügt die Fragmente im Speicher zu einem einzigen verarbeitbaren Gesamt-Stream zusammen.
