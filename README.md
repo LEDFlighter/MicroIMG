@@ -12,7 +12,6 @@
 * **Smart Multi-Chunk Assembly:** Automatically splits larger payloads across multiple NFC tags and reconstructs them in the browser — regardless of the order in which the tags are scanned.
 * **Zero-Spam Hardware Handshake:** Features a dual-endpoint architecture (`/read-chunk` for payload scanning and `/check-tag` for lightweight presence checks) to protect hardware and avoid continuous polling spam.
 * **Non-Blocking Scan Workflow:** Seamlessly handles tag removal detection (`waitingForTagRemoval`), ensuring each chunk is captured exactly once.
-* **Visual Flash Feedback:** Provides instant visual UI feedback on successful reads, complementing physical NFC reader buzzers.
 
 ## 🛠 Architecture & Workflow
 
@@ -50,7 +49,6 @@ During the scanning process, MicroIMG strips duplicate sequence headers and seam
 * **Intelligentes Multi-Chunking:** Teilt größere Payloads automatisch auf mehrere NFC-Tags auf und fügt sie im Browser nahtlos zusammen – unabhängig von der Reihenfolge beim Auflegen.
 * **Ressourcenschonender Hardware-Handshake:** Nutzt eine getrennte Endpunkt-Architektur (`/read-chunk` für Nutzdaten, `/check-tag` für Presence-Checks), um Reader-Hardware (z. B. ACR1252U) und Systemressourcen zu schonen.
 * **Blockierungsfreier Scan-Workflow:** Erkennung des Abnehmens von Tags (`waitingForTagRemoval`) verhindert doppeltes Einlesen und Dauer-Polling.
-* **Optisches Flash-Feedback:** Sofortige visuelle Rückmeldung im Browser-UI bei erfolgreichem Einlesen eines Chunks als Ergänzung zum physischen Reader-Summer.
 
 ## 🛠 Architektur & Ablauf
 
