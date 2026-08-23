@@ -11,8 +11,6 @@ import smartcard.scard as scard
 
 # Verzeichnis des aktuellen Skripts festlegen
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-from smartcard.System import readers
-from smartcard.Exceptions import NoCardException, CardConnectionException
 
 app = Flask(__name__)
 CORS(app)  # Erlaubt Anfragen direkt aus deiner lokalen HTML-Datei (Cross-Origin)
