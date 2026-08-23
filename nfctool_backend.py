@@ -1,11 +1,13 @@
 import os
 import time
 import logging
+import threading
 from waitress import serve
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from smartcard.System import readers
 from smartcard.Exceptions import NoCardException, CardConnectionException
+import smartcard.scard as scard
 
 # Verzeichnis des aktuellen Skripts festlegen
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,6 +18,47 @@ app = Flask(__name__)
 CORS(app)  # Erlaubt Anfragen direkt aus deiner lokalen HTML-Datei (Cross-Origin)
 last_printed_chunk = None
 was_tag_present = False
+waiting_reported = False
+reader_lock = threading.Lock()
+cancel_requested = False
+
+def reset_nfc_hardware():
+    """Erzwingt den Release des PC/SC Treibers nach einem abgebrochenen Transfer."""
+    try:
+        # Nur das Scope-Argument übergeben
+        hresult, hcontext = scard.SCardEstablishContext(scard.SCARD_SCOPE_USER)
+        if hresult == 0:
+            scard.SCardReleaseContext(hcontext)
+            print("🔄 PC/SC Treiber-Kontext erfolgreich zurückgesetzt.")
+        else:
+            print(f"⚠️ SCardEstablishContext Fehlercode: {hresult}")
+    except Exception as e:
+        print(f"⚠️ Hinweis beim Hardware-Reset: {e}")
+
+@app.route('/cancel', methods=['POST'])
+def handle_cancel():
+    global cancel_requested, was_tag_present, last_printed_chunk
+    cancel_requested = True
+    
+    # State zurücksetzen, damit der nächste Read als "neuer Tag" erkannt wird
+    was_tag_present = False
+    last_printed_chunk = None
+
+    # Falls der Schreibvorgang eine aktive 'conn' hinterlassen hat, 
+    # trennen wir sie hier mit Aufhebung der Feldspannung (UNPOWER)
+    try:
+        r_list = readers()
+        if r_list:
+            reader = r_list[0]
+            conn = reader.createConnection()
+            # Verbinden und direkt mit UNPOWER trennen, um das RF-Feld zu resetten
+            conn.connect()
+            conn.disconnect()
+    except Exception as e:
+        print(f"ℹ️ Hardware-Reset bei Abbruch: {e}")
+
+    print("🛑 Schreibvorgang abgebrochen – Hardware zurückgesetzt.")
+    return jsonify({"success": True, "message": "Schreibvorgang abgebrochen."})
 
 def build_ndef_text_payload(text_string):
     """Baut eine NDEF Text Message auf.
@@ -161,49 +204,71 @@ def index():
     
 @app.route('/read-chunk', methods=['GET'])
 def handle_read_chunk():
-    global last_printed_chunk, was_tag_present
+    global last_printed_chunk, was_tag_present, cancel_requested
+
+    # 1. Abbruch-Flag zurücksetzen
+    cancel_requested = False
+
+    # 2. Hardware-Sperre holen (warten, bis der Reader frei ist)
+    got_lock = reader_lock.acquire(blocking=True, timeout=1.0)
+    if not got_lock:
+        return jsonify({'success': False, 'error': 'Hardware beschäftigt'}), 200
 
     try:
-        available_readers = readers()
-        if not available_readers:
+        r_list = readers()
+        if not r_list:
             was_tag_present = False
             last_printed_chunk = None
-            return jsonify({'success': False, 'error': 'Kein Reader'}), 200
+            return jsonify({'success': False, 'error': 'Kein Reader angeschlossen'}), 200
 
-        reader = available_readers[0]
-        conn = reader.createConnection()
-        conn.connect()
+        reader = r_list[0]
+        conn = None
 
-        # --- TAG LIEGT AUF DEM READER ---
+        # 3. ENDLOSSCHLEIFE: Wartet unendlich lange, bis ein Tag erkannt wird
+        while not cancel_requested:
+            try:
+                conn = reader.createConnection()
+                conn.connect()
+                # Verbindung erfolgreich -> Tag liegt auf!
+                break
+            except Exception:
+                # Kein Tag auf dem Leser oder Verbindung fehlgeschlagen
+                try:
+                    conn.disconnect()
+                except Exception:
+                    pass
+                time.sleep(0.2)  # Kurze Entlastung für die CPU (200ms)
+
+        # Abfangen, falls während des Wartens abgebrochen wurde
+        if cancel_requested or not conn:
+            return jsonify({'success': False, 'error': 'Lesevorgang abgebrochen'}), 200
+
+        # 4. Daten vom aufgelegten Tag einlesen
         chunk_text = read_text_from_tag(conn)
 
         if chunk_text:
-            # 1. Wurde der Tag NEU aufgelegt oder hat sich der Inhalt geändert?
             if not was_tag_present or last_printed_chunk != chunk_text:
                 print('\n==================================================')
                 print('🎴 Tag erkannt! Lese Daten...')
                 print(f'✅ Erfolgreich gelesen! Vorschau: {chunk_text[:40]}...')
                 print('==================================================')
-                
-                # Zustand aktualisieren
                 last_printed_chunk = chunk_text
                 was_tag_present = True
 
-            # Die Daten werden wie gewohnt an das JS-Frontend geliefert
             return jsonify({'success': True, 'data': chunk_text}), 200
         else:
             was_tag_present = True
-            return jsonify({'success': False, 'error': 'Keine gültigen Daten'}), 200
+            return jsonify({'success': False, 'error': 'Keine gültigen Daten auf dem Tag'}), 200
 
-    except Exception:
-        # --- KEIN TAG ODER TAG GERADE ABGENOMMEN ---
+    except Exception as e:
         if was_tag_present:
-            # Wird genau ein Mal im Terminal ausgegeben, wenn der Tag abgenommen wird
-            print('↔️ Tag wurde vom Reader entfernt.')
+            print(f'⚠️ Lesefehler: {e}')
             was_tag_present = False
             last_printed_chunk = None
+        return jsonify({'success': False, 'error': str(e)}), 200
 
-        return jsonify({'success': False, 'error': 'Kein Tag auf dem Reader'}), 200
+    finally:
+        reader_lock.release()
         
 @app.route('/check-tag', methods=['GET'])
 def handle_check_tag():
@@ -223,70 +288,123 @@ def handle_check_tag():
 
 @app.route('/write-chunks', methods=['POST'])
 def handle_write_chunks():
+    global cancel_requested
+    cancel_requested = False
+    
     data = request.json
     chunks = data.get("chunks", [])
-    
+
     if not chunks:
         return jsonify({"success": False, "error": "Keine Chunks übergeben"}), 400
 
     print(f"\n🚀 Empfange {len(chunks)} Chunk(s) zum Schreiben...")
-    
+
     for idx, chunk_str in enumerate(chunks):
+        if cancel_requested:
+            print("🛑 Schreibvorgang durch Benutzer abgebrochen.")
+            return jsonify({"success": False, "error": "Vorgang abgebrochen."}), 400
+
         print(f"\n==================================================")
         print(f"👉 CHUNK [{idx + 1}/{len(chunks)}]")
         print(f"   Vorschau: {chunk_str[:40]}...")
-        print(f"   Bitte Tag AUFLEGEN...")
         print(f"==================================================")
-        
+
         written = False
-        last_status_time = 0
-        
+        waiting_reported = False
+
         while not written:
+            if cancel_requested:
+                print("🛑 Schreibvorgang durch Benutzer abgebrochen.")
+                return jsonify({"success": False, "error": "Vorgang abgebrochen."}), 400
+
+            got_lock = reader_lock.acquire(blocking=True, timeout=0.3)
+            if not got_lock:
+                continue
+
+            conn = None
             try:
                 available_readers = readers()
                 if not available_readers:
-                    if time.time() - last_status_time > 3:
-                        print("⚠️ Kein NFC-Reader gefunden! Bitte ACR1252 anschließen.")
-                        last_status_time = time.time()
-                    time.sleep(1)
+                    if not waiting_reported:
+                        print("⚠️ Kein NFC-Reader gefunden!")
+                        waiting_reported = True
+                    time.sleep(0.5)
                     continue
 
                 reader = available_readers[0]
                 conn = reader.createConnection()
-                
-                # Versuch, die Karte zu verbinden
                 conn.connect()
-                print("🎴 Tag erkannt! Starte Schreibvorgang...")
 
-                # Schreiben ausführen
+                waiting_reported = False
+                print("🎴 Tag erkannt!")
+
+                if cancel_requested:
+                    print("🛑 Schreibvorgang DIREKT vor Hardware-Zugriff gestoppt.")
+                    return jsonify({"success": False, "error": "Vorgang abgebrochen."}), 400
+
+                print("✍️ Schreibe auf den Tag...")
                 if write_to_tag(conn, chunk_str):
-                    print(f"✅ Chunk {idx + 1}/{len(chunks)} ERFOLGREICH GESCHRIEBEN!")
-                    written = True
-                    print("👉 Bitte Tag JETZT vom Leser entfernen...")
-                    time.sleep(2.5)  # Pause zum Abnehmen des Tags
+                    
+                    # --- 1. READ-AFTER-WRITE VERIFIZIERUNG ---
+                    print("🔍 Verifiziere Daten auf dem Tag...")
+                    read_back = read_text_from_tag(conn)
+
+                    if read_back and read_back.strip() == chunk_str.strip():
+                        print(f"✅ Chunk {idx + 1}/{len(chunks)} VERIFIZIERT & GESCHRIEBEN!")
+                        written = True
+                    else:
+                        print("❌ Verifizierung fehlgeschlagen! Daten auf dem Tag stimmen nicht überein.")
+                        time.sleep(1)
+                        continue
                 else:
-                    print("❌ Schreibvorgang fehlgeschlagen! Versuche erneut in 1s...")
+                    print("❌ Schreibvorgang fehlgeschlagen!")
                     time.sleep(1)
+                    continue
 
             except NoCardException:
-                # Kein Tag auf dem Leser – das ist der normale Wartezustand
-                if time.time() - last_status_time > 3:
+                if not waiting_reported:
                     print("⌛ Warte auf NFC-Tag...")
-                    last_status_time = time.time()
-                time.sleep(0.5)
-            except CardConnectionException as e:
-                print(f"⚠️ Verbindungsfehler zum Tag: {e}. Bitte Tag ruhig auflegen.")
-                time.sleep(1)
+                    waiting_reported = True
             except Exception as e:
-                print(f"⚠️ Unerwarteter Fehler: {e}")
-                time.sleep(1)
+                print(f"⚠️ Hinweis beim Schreiben: {e}")
+            finally:
+                if conn is not None:
+                    try:
+                        conn.disconnect()
+                    except Exception:
+                        pass
+                reader_lock.release()
+
+            time.sleep(0.2)
+
+        # --- 2. PAUSE: Warten, bis der eben beschriebene Tag ANGEHOBEN wird ---
+        if idx < len(chunks) - 1:  # Nur nötig, wenn noch weitere Chunks folgen
+            print("👉 Bitte Tag jetzt vom Leser ENTFERNEN...")
+            tag_removed = False
+            while not tag_removed and not cancel_requested:
+                got_lock = reader_lock.acquire(blocking=True, timeout=0.3)
+                if got_lock:
+                    try:
+                        available_readers = readers()
+                        if available_readers:
+                            test_conn = available_readers[0].createConnection()
+                            test_conn.connect()
+                            test_conn.disconnect()
+                            # Wenn die Verbindung klappt, liegt der alte Tag noch auf!
+                            time.sleep(0.3)
+                    except Exception:
+                        # NoCardException -> Tag wurde erfolgreich entfernt!
+                        tag_removed = True
+                        print("✅ Tag entfernt! Bereit für den nächsten Tag.")
+                    finally:
+                        reader_lock.release()
 
     print("\n🎉 ALLE CHUNKS ERFOLGREICH BESCHRIEBEN!")
-    return jsonify({"success": True, "message": "Alle Tags beschrieben"})
+    return jsonify({"success": True, "message": "Alle Chunks geschrieben"}), 200
 
 if __name__ == "__main__":
     print("=" * 60)
-    print(" 🌐 Emerald Engine NFC Server gestartet!")
+    print(" 🌐 MicroIMG Server gestartet!")
     print(" 👉 Öffne im Browser: http://127.0.0.1:5000")
     print("=" * 60)
-    serve(app, host='0.0.0.0', port=5000)
+    serve(app, host='0.0.0.0', port=5000, threads=6)
