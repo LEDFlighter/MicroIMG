@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MicroIMG</title>
+    <link rel="stylesheet" href="static/stylesheet.css">
+	<link rel="icon" type="image/png" href="static/favicon.png">
+</head>
+<body data-theme="dark">
+
+<div class="container">
+    <div class="header">
+        <h1 style="font-size: 1.1rem; font-weight: 900; margin:0;">Micro <span style="color: var(--primary)"> IMG</span> 2.0<span style="color: var(--primary)"> Stable Version</span></h1>
+        <button onclick="toggleTheme()" style="background:none; border:none; color:var(--text); cursor:pointer; font-size: 0.7rem; font-weight:bold;">🌓 THEME</button>
+    </div>
+
+    <div class="grid-layout">
+        <div class="left-col">
+            <div class="card">
+                <h2>⚙️ CORE SETTINGS</h2>
+                <label>Bildquelle</label>
+                <input type="file" id="imgInput" accept="image/*">
+                <label>Max. Auflösung (Seitenverhältnis bleibt)</label>
+					<select id="size" onchange="forceUpdate()">
+						<option value="16">16 × 16</option>
+						<option value="32">32 × 32</option>
+						<option value="48">48 × 48</option>
+						<option value="64" selected>64 × 64</option>
+						<option value="128">128 × 128</option>
+						<option value="256">256 × 256</option>
+						<option value="512">512 × 512</option>
+						<option value="1024">1024 × 1024</option>
+					</select>
+                <label>Verfahren</label>
+                <div class="mode-container">
+                    <button class="mode-btn" id="btn-G4" onclick="setMode('G4')">G4-RLE</button>
+                    <button class="mode-btn" id="btn-DEEP" onclick="setMode('DEEP')">DEEP-PX</button>
+                    <button class="mode-btn active" id="btn-ZIP" onclick="setMode('ZIP')">ZIP-ULTRA</button>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="fmt-landscape" class="mode-btn active" style="flex:1; border:1px solid var(--border);" onclick="setOrientation('landscape')">QUER ↔️</button>
+                    <button id="fmt-portrait" class="mode-btn" style="flex:1; border:1px solid var(--border);" onclick="setOrientation('portrait')">HOCH ↕️</button>
+                </div>
+                <label>Zoom & Fokus (Ziehen im Bild)</label>
+                <input type="range" id="zoomSelect" min="100" max="1600" value="100" oninput="forceUpdate()" style="width:100%;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                    <div><label>Farb-Dynamik</label><input type="range" id="tolerance" min="2" max="16" value="16" oninput="forceUpdate()"></div>
+                    <div><label>Kontrast</label><input type="range" id="contrast" min="80" max="400" value="100" oninput="forceUpdate()"></div>
+                </div>
+                <div class="monitor-area">
+                    <div id="liveStats" class="stats-display">Warte auf Bild...</div>
+                    <div class="canvas-container" id="canvasFrame">
+                        <canvas id="mainCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-col">
+            <div class="card">
+                <h2>📦 BATCH & NFC</h2>
+                <label>Ziel Hardware</label>
+                <select id="tagSelect" onchange="forceUpdate()">
+                    <optgroup label="NTAG Serie (Type 2)">
+                        <option value="48">NTAG 210 (48 Byte)</option>
+                        <option value="128">NTAG 212 (128 Byte)</option>
+                        <option value="144">NTAG 213 (144 Byte)</option>
+                        <option value="504">NTAG 215 (504 Byte / Amiibo)</option>
+                        <option value="868" selected>NTAG 216 (868 Byte)</option>
+                    </optgroup>
+                    <optgroup label="MIFARE Ultralight">
+                        <option value="64">Ultralight C (64 Byte)</option>
+                        <option value="192">Ultralight EV1 (192 Byte)</option>
+                    </optgroup>
+                    <optgroup label="MIFARE DESFire (Type 4)">
+                        <option value="2000">DESFire EV1/2/3 2K</option>
+                        <option value="4000">DESFire EV1/2/3 4K</option>
+                        <option value="8000">DESFire EV1/2/3 8K</option>
+                        <option value="16000">DESFire EV1/2/3 16K</option>
+                        <option value="32000">DESFire EV1/2/3 32K</option>
+                    </optgroup>
+                    <optgroup label="Sonstige">
+                        <option value="1024">MIFARE Classic 1K (716 Netto)</option>
+                        <option value="4096">MIFARE Classic 4K</option>
+                        <option value="2000">ICODE SLIX (2K)</option>
+                    </optgroup>
+                </select>
+                <button class="btn-main btn-emerald" onclick="finalizeBatch()">BATCH GENERIEREN</button>
+                <button class="btn-main" style="background: #0ea5e9;" onclick="writeBatchToNfc()">NFC SEQUENCE WRITE 💾</button>
+				<button id="btnCancel" class="btn-main" style="display: none; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="cancelWrite()">❌ ABBRECHEN</button>
+                <div id="chunksContainer" class="chunk-grid"></div>
+            </div>
+
+            <div class="card">
+                <h2>🔍 RECOVERY</h2>
+                <button class="btn-main" style="background:#334155;" onclick="readFromNfc()">NFC SEQUENCE READ 📡</button>
+                <textarea id="inputRaw" style="margin-top:15px; height:60px;" placeholder="Code Paste..."></textarea>
+                <button class="btn-main btn-emerald" onclick="universalDecode()">START DECODE</button> 
+				<button class="btn-main btn-clear" onclick="clearDecode()">CLEAR</button>
+                <div id="rePreview" style="margin-top:20px; text-align:center;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="static/pako.js"></script>
+<script src="static/script.js" defer></script>
+</body>
+</html>
