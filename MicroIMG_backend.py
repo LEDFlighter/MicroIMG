@@ -5,9 +5,18 @@ import threading
 from waitress import serve
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-from smartcard.System import readers
-from smartcard.Exceptions import NoCardException, CardConnectionException
-import smartcard.scard as scard
+
+# --- SMARTCARD / PYESCARD IMPORT MIT FALLBACK ---
+try:
+    from smartcard.System import readers
+    from smartcard.Exceptions import NoCardException, CardConnectionException
+    import smartcard.scard as scard
+    SMARTCARD_AVAILABLE = True
+    print("[INFO] 'smartcard'-Modul erfolgreich geladen (Hardware-Modus aktiv).")
+except ModuleNotFoundError:
+    SMARTCARD_AVAILABLE = False
+    print("[WARNUNG] 'smartcard'-Modul nicht gefunden (Termux/Mock-Modus aktiv). Hardware-Funktionen sind deaktiviert.")
+
 
 # Verzeichnis des aktuellen Skripts festlegen
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +30,12 @@ reader_lock = threading.Lock()
 cancel_requested = False
 
 def reset_nfc_hardware():
+# --- HARDWARE-CHECK FÜR TERMUX / MOBIL ---
+    if not SMARTCARD_AVAILABLE:
+        return jsonify({
+            "success": False,
+            "error": "Hardwarezugriff auf Termux nicht verfügbar. Bitte nutze einen PC mit angeschlossenem USB-NFC-Reader."
+        }), 503
     """Erzwingt den Release des PC/SC Treibers nach einem abgebrochenen Transfer."""
     try:
         # Nur das Scope-Argument übergeben
@@ -92,6 +107,12 @@ def build_ndef_text_payload(text_string):
 
 
 def write_to_tag(connection, chunk_str):
+# --- HARDWARE-CHECK FÜR TERMUX / MOBIL ---
+    if not SMARTCARD_AVAILABLE:
+        return jsonify({
+            "success": False,
+            "error": "Hardwarezugriff nicht verfügbar. Bitte nutze einen PC mit angeschlossenem USB-NFC-Reader."
+        }), 503
     raw_bytes = build_ndef_text_payload(chunk_str)
     total_len = len(raw_bytes)
 
@@ -122,6 +143,12 @@ def write_to_tag(connection, chunk_str):
     return True
 
 def read_text_from_tag(connection):
+# --- HARDWARE-CHECK FÜR TERMUX / MOBIL ---
+    if not SMARTCARD_AVAILABLE:
+        return jsonify({
+            "success": False,
+            "error": "Hardwarezugriff nicht verfügbar. Bitte nutze einen PC mit angeschlossenem USB-NFC-Reader."
+        }), 503
     """
     Liest die Pages ab Page 4 aus, extrahiert den NDEF Text Payload
     und stoppt beim Terminator-Byte 0xFE.
@@ -195,13 +222,19 @@ def read_text_from_tag(connection):
 @app.route('/')
 def index():
     # Passe den Dateinamen an, falls deine HTML-Datei anders heißt (z.B. index.html)
-    html_path = os.path.join(BASE_DIR, 'nfctool25_latest_TagWrite_python_server.html')
+    html_path = os.path.join(BASE_DIR, 'MicroIMG_GUI.html')
     if os.path.exists(html_path):
         return send_file(html_path)
     return "❌ HTML-Datei nicht gefunden! Bitte Dateiname im Python-Skript prüfen.", 404
     
 @app.route('/read-chunk', methods=['GET'])
 def handle_read_chunk():
+# --- HARDWARE-CHECK FÜR TERMUX / MOBIL ---
+    if not SMARTCARD_AVAILABLE:
+        return jsonify({
+            "success": False,
+            "error": "Hardwarezugriff nicht verfügbar. Bitte nutze einen PC mit angeschlossenem USB-NFC-Reader."
+        }), 503
     global last_printed_chunk, was_tag_present, cancel_requested
 
     # 1. Abbruch-Flag zurücksetzen
@@ -286,6 +319,13 @@ def handle_check_tag():
 
 @app.route('/write-chunks', methods=['POST'])
 def handle_write_chunks():
+
+# --- HARDWARE-CHECK FÜR TERMUX / MOBIL ---
+    if not SMARTCARD_AVAILABLE:
+        return jsonify({
+            "success": False,
+            "error": "Hardwarezugriff nicht verfügbar. Bitte nutze einen PC mit angeschlossenem USB-NFC-Reader."
+        }), 503
     global cancel_requested
     cancel_requested = False
     
