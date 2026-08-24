@@ -337,7 +337,6 @@ async function finalizeBatch() {
         copyAllBtn.onclick = async () => {
             const cleanText = allChunksText.trim();
 
-            // 1. Sicheres Kopieren in die Zwischenablage
             // 1. Sicheres Kopieren in die Zwischenablage mit direktem Fallback
 		try {
 			if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -511,207 +510,207 @@ async function cancelWrite() {
     }
 }
 
-async function readFromNfc() {
-    console.log("🔍 Starte NFC-Leseversuch...");
+async function readFromNfc() { 
+    console.log("🔍 Starte NFC-Leseversuch..."); 
 
-    if (typeof isWriting !== 'undefined' && isWriting) {
-        console.warn("Lese-Vorgang abgebrochen: Schreib-Modus ist noch aktiv.");
-        return;
-    }
+    if (typeof isWriting !== 'undefined' && isWriting) { 
+        console.warn("Lese-Vorgang abgebrochen: Schreib-Modus ist noch aktiv."); 
+        return; 
+    } 
 
-    const btnRead = document.getElementById('btnRead') || document.querySelector('button[onclick*="readFromNfc"]');
-    const statusDiv = document.getElementById('statusMessage');
-    const inputRaw = document.getElementById('inputRaw');
-    const previewZone = document.getElementById('rePreview');
+    const btnRead = document.getElementById('btnRead') || document.querySelector('button[onclick*="readFromNfc"]'); 
+    const statusDiv = document.getElementById('statusMessage'); 
+    const inputRaw = document.getElementById('inputRaw'); 
+    const previewZone = document.getElementById('rePreview'); 
 
-    let originalBtnText = "";
-    if (btnRead) {
-        originalBtnText = btnRead.innerHTML;
-        btnRead.disabled = true;
-        btnRead.innerHTML = "⏳ Warte auf NFC-Tag...";
-    }
+    let originalBtnText = ""; 
+    if (btnRead) { 
+        originalBtnText = btnRead.getAttribute('data-orig-text') || btnRead.innerHTML;
+        btnRead.setAttribute('data-orig-text', originalBtnText);
+        btnRead.disabled = true; 
+        btnRead.innerHTML = "⏳ Warte auf NFC-Tag..."; 
+    } 
 
-    if (statusDiv) {
-        statusDiv.textContent = "📡 Bereit. Halte einen NFC-Tag an den Leser...";
-        statusDiv.style.color = "#3b82f6";
-    }
+    if (statusDiv) { 
+        statusDiv.textContent = "📡 Bereit. Halte einen NFC-Tag an den Leser..."; 
+        statusDiv.style.color = "#3b82f6"; 
+    } 
 
-    try {
-        const response = await fetch('/read-chunk');
-        const result = await response.json();
+    let shouldContinueReading = false;
 
-        if (result.success && result.data) {
-            const chunkData = result.data.trim();
+    try { 
+        const response = await fetch('/read-chunk'); 
+        const result = await response.json(); 
 
-            // Chunk anfügen (Duplikate verhindern)
-            if (inputRaw) {
-                if (inputRaw.value.trim() !== '') {
-                    if (!inputRaw.value.includes(chunkData)) {
-                        inputRaw.value = inputRaw.value.trim() + "\n" + chunkData;
-                    }
-                } else {
-                    inputRaw.value = chunkData;
-                }
+        // 1. HTTP-Fehler (z. B. 503 Hardware nicht verfügbar) abfangen
+        if (!response.ok) {
+            if (statusDiv) {
+                statusDiv.textContent = `❌ ${result.error || 'Hardwarezugriff nicht verfügbar.'}`;
+                statusDiv.style.color = "#ef4444";
             }
+            if (previewZone) {
+                previewZone.innerHTML = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; padding: 12px; border-radius: 8px; color: #f87171; text-align: center;">
+                        ⚠️ <strong>Hardware-Fehler:</strong> ${result.error || 'Kein NFC-Leser gefunden oder Smartcard-Library fehlt.'}
+                    </div>`;
+            }
+            // Beendet die Funktion sofort – keine Rekursion
+            return;
+        }
 
-            // Auswertung und Validierung des Chunks-Bestands
-            const rawText = inputRaw ? inputRaw.value.trim() : "";
-            const lines = rawText.split('\n').map(l => l.trim()).filter(l => l !== '');
-            
-            // Chunks parsen: Trennt den Header restlos ab
-            // Chunks parsen: Erkennt jeden gültigen PX/Y# Header flexibel
-            const parsedChunks = lines.map(line => {
-                const cleanLine = line.trim();
-                const hashIdx = cleanLine.indexOf('#');
-                if (hashIdx === -1) return null;
+        // 2. Erhaltener Chunk verarbeiten (HTTP 200 OK)
+        if (result.success && result.data) { 
+            const chunkData = result.data.trim(); 
 
-                const header = cleanLine.substring(0, hashIdx); // z.B. "P1/3" oder "P2/3"
-                const payload = cleanLine.substring(hashIdx + 1); // Alles nach dem '#'
+            // 1. Chunk anfügen (Duplikate auf Zeilenebene vermeiden) 
+            if (inputRaw) {  
+                const existingLines = inputRaw.value.split('\n').map(l => l.trim()).filter(Boolean); 
+                if (!existingLines.includes(chunkData)) { 
+                    existingLines.push(chunkData); 
+                    inputRaw.value = existingLines.join('\n'); 
+                } 
+            }  
 
-                const match = header.match(/^P(\d+)\/(\d+)$/i);
-                return match ? { 
-                    index: parseInt(match[1], 10), 
-                    total: parseInt(match[2], 10), 
-                    payload: payload, 
-                    raw: cleanLine 
-                } : null;
-            }).filter(item => item !== null);
+            // 2. Chunks parsen 
+            const rawText = inputRaw ? inputRaw.value.trim() : "";  
+            const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);  
+              
+            const parsedChunks = lines.map(line => {  
+                const hashIdx = line.indexOf('#');  
+                if (hashIdx === -1) return null;  
 
-            if (parsedChunks.length === 0) {
-                if (previewZone) {
-                    previewZone.innerHTML = `
-                        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; padding: 12px; border-radius: 8px; color: #fbbf24; text-align: center;">
-                            ℹ️ ${lines.length} Zeile(n) gelesen, aber noch kein gültiger Header (P1/X#) gefunden...
-                        </div>`;
-                }
-            } else {
-                // 1. Prüfen, ob alle eingelesenen Chunks zur selben Gesamtanzahl gehören
-                const expectedTotals = [...new Set(parsedChunks.map(c => c.total))];
-                
-                if (expectedTotals.length > 1) {
-                    if (previewZone) {
-                        previewZone.innerHTML = `
-                            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; padding: 12px; border-radius: 8px; color: #f87171; text-align: center;">
-                                ⚠️ <strong>Konflikt erkannt:</strong> Es wurden Chunks von unterschiedlichen Sets vermischt.
-                            </div>`;
-                    }
-                    if (statusDiv) {
-                        statusDiv.textContent = "❌ Ungültige Chunk-Kombination!";
-                        statusDiv.style.color = "#ef4444";
-                    }
-                    if (btnRead) { btnRead.disabled = false; btnRead.innerHTML = originalBtnText; }
-                    return;
-                }
+                const header = line.substring(0, hashIdx);  
+                const payload = line.substring(hashIdx + 1);  
 
-                const totalExpected = expectedTotals[0];
-                const foundIndices = new Set(parsedChunks.map(c => c.index));
+                const match = header.match(/^P(\d+)\/(\d+)$/i);  
+                return match ? {   
+                    index: parseInt(match[1], 10),   
+                    total: parseInt(match[2], 10),   
+                    payload: payload,   
+                    raw: line   
+                } : null;  
+            }).filter(Boolean);
 
-                // 2. Prüfen, ob alle Indizes von 1 bis totalExpected vorhanden sind
-                let isComplete = true;
-                for (let i = 1; i <= totalExpected; i++) {
-                    if (!foundIndices.has(i)) {
-                        isComplete = false;
-                        break;
-                    }
-                }
-
-                if (!isComplete) {
-                    if (previewZone) {
-                        previewZone.innerHTML = `
-                            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; padding: 12px; border-radius: 8px; color: #60a5fa; text-align: center;">
-                                ⏳ Fortschritt: ${foundIndices.size} von ${totalExpected} eindeutigen Chunks im Speicher. Leg den nächsten Tag auf...
-                            </div>`;
-                    }
-                    if (statusDiv) {
-                        statusDiv.textContent = `✅ Chunk erfasst (${foundIndices.size}/${totalExpected}). Bereit für nächsten Tag.`;
-                        statusDiv.style.color = "#10b981";
-                    }
-
-                    if (btnRead) {
-                        btnRead.disabled = false;
-                        btnRead.innerHTML = originalBtnText;
-                    }
-
-                    // Nächsten Tag abfragen
-                    return readFromNfc();
-
-                } else {
-                    // ALLE Chunks vollständig
-                    if (previewZone) {
-                        previewZone.innerHTML = `
-                            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; padding: 12px; border-radius: 8px; color: #34d399; text-align: center;">
-                                🚀 Alle ${totalExpected} passenden Chunks komplett! Baue Datenstrom zusammen...
-                            </div>`;
-                    }
-                    if (statusDiv) {
-                        statusDiv.textContent = "🎉 Alle Tags erfolgreich eingelesen!";
-                        statusDiv.style.color = "#10b981";
-                    }
-
-                    const chunkMap = {}; 
-                    parsedChunks.forEach(c => { chunkMap[c.index] = c; }); 
-
-                    let orderedParts = [];  
-                    for (let i = 1; i <= totalExpected; i++) {  
-                        const chunk = chunkMap[i];  
-                        let cleanPayload = chunk.payload.replace(/\s+/g, '');  
-
-                        // Säubert JEDEN Chunk von eventuellen Header-Resten (P1/3#, P1/3, etc.)
-                        cleanPayload = cleanPayload.replace(/^P\d+\/\d+#?/, ''); 
-
-                        if (i === 1) { 
-                            // Entfernt ZIP: oder ZIP am Anfang von Chunk 1
-                            cleanPayload = cleanPayload.replace(/^ZIP:?/i, ''); 
-                        } 
-                        
-                        orderedParts.push(cleanPayload); 
-                    }  
-
-                    // 1. Reines Base64 zusammenfügen und von jeglichen Sonderzeichen reinigen
-                    const rawBase64 = orderedParts.join('').replace(/[^A-Za-z0-9+/=]/g, '');  
-
-                    // 2. Den Header unumstößlich korrekt aufbauen
-                    const finalPayload = `P1/${totalExpected}#ZIP:${rawBase64}`; 
-
-                    // --- DEBUG LOGS --- 
-                    console.log("Finaler Payload Länge:", finalPayload.length); 
-                    console.log("Startet mit P1/ Header:", finalPayload.startsWith("P1/")); 
-                    console.log("Erste 30 Zeichen:", finalPayload.substring(0, 30)); 
-                    console.log("Letzte 30 Zeichen:", finalPayload.substring(finalPayload.length - 30)); 
-                    // ------------------ 
-
-                    // 3. Ins Textfeld schreiben
-                    if (inputRaw) { 
-                        inputRaw.value = finalPayload; 
+            if (parsedChunks.length === 0) { 
+                if (previewZone) { 
+                    previewZone.innerHTML = ` 
+                        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; padding: 12px; border-radius: 8px; color: #fbbf24; text-align: center;"> 
+                            ℹ️ ${lines.length} Zeile(n) gelesen, aber noch kein gültiger Header (PX/Y#) gefunden... 
+                        </div>`; 
+                } 
+            } else { 
+                // Prüfen auf gemischte Sets
+                const expectedTotals = [...new Set(parsedChunks.map(c => c.total))]; 
+                 
+                if (expectedTotals.length > 1) { 
+                    if (previewZone) { 
+                        previewZone.innerHTML = ` 
+                            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; padding: 12px; border-radius: 8px; color: #f87171; text-align: center;"> 
+                                ⚠️ <strong>Konflikt erkannt:</strong> Es wurden Chunks von unterschiedlichen Sets vermischt. 
+                            </div>`; 
                     } 
+                    if (statusDiv) { 
+                        statusDiv.textContent = "❌ Ungültige Chunk-Kombination!"; 
+                        statusDiv.style.color = "#ef4444"; 
+                    } 
+                    return; 
+                } 
 
-                    // 4. Dekodierung anstoßen
-                    if (typeof decodeAndPreview === 'function') { 
-                        decodeAndPreview(); 
-                    } else if (typeof universalDecode === 'function') { 
-                        universalDecode(); 
+                const totalExpected = expectedTotals[0]; 
+                const foundIndices = new Set(parsedChunks.map(c => c.index)); 
+
+                // Vollständigkeit prüfen
+                let isComplete = true; 
+                for (let i = 1; i <= totalExpected; i++) { 
+                    if (!foundIndices.has(i)) { 
+                        isComplete = false; 
+                        break; 
                     } 
                 } 
-            }
 
-        } else {
-            const errorMsg = result.error || result.message || "Kein Tag erkannt";
-            if (statusDiv) {
-                statusDiv.textContent = `⚠️ ${errorMsg}`;
-                statusDiv.style.color = "#f59e0b";
-            }
-        }
-    } catch (e) {
-        console.error("Fehler beim Abrufen vom NFC-Server:", e);
-        if (statusDiv) {
-            statusDiv.textContent = "❌ Server-Verbindungsfehler";
-            statusDiv.style.color = "#ef4444";
-        }
-    } finally {
-        if (btnRead) {
-            btnRead.disabled = false;
-            btnRead.innerHTML = originalBtnText;
-        }
+                if (!isComplete) { 
+                    if (previewZone) { 
+                        previewZone.innerHTML = ` 
+                            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; padding: 12px; border-radius: 8px; color: #60a5fa; text-align: center;"> 
+                                ⏳ Fortschritt: ${foundIndices.size} von ${totalExpected} eindeutigen Chunks erfasst. Nächsten Tag auflegen... 
+                            </div>`; 
+                    } 
+                    if (statusDiv) { 
+                        statusDiv.textContent = `✅ Chunk erfasst (${foundIndices.size}/${totalExpected}). Bereit für nächsten Tag.`; 
+                        statusDiv.style.color = "#10b981"; 
+                    } 
+
+                    // Flag setzen für Fortsetzung nach dem finally-Block
+                    shouldContinueReading = true; 
+
+                } else { 
+                    // ALLE Chunks vorhanden
+                    if (previewZone) { 
+                        previewZone.innerHTML = ` 
+                            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; padding: 12px; border-radius: 8px; color: #34d399; text-align: center;"> 
+                                🚀 Alle ${totalExpected} Chunks komplett! Baue Datenstrom zusammen... 
+                            </div>`; 
+                    } 
+                    if (statusDiv) { 
+                        statusDiv.textContent = "🎉 Alle Tags erfolgreich eingelesen!"; 
+                        statusDiv.style.color = "#10b981"; 
+                    } 
+
+                    const chunkMap = {};  
+                    parsedChunks.forEach(c => { chunkMap[c.index] = c; });  
+
+                    let orderedParts = [];   
+                    for (let i = 1; i <= totalExpected; i++) {   
+                        let cleanPayload = chunkMap[i].payload.replace(/\s+/g, '');   
+                        // Entfernt redundante Header oder ZIP-Präfixe aus den einzelnen Payloads
+                        cleanPayload = cleanPayload.replace(/^P\d+\/\d+#?/, '').replace(/^ZIP:?/i, '');  
+                        orderedParts.push(cleanPayload);   
+                    }   
+
+                    // Base64 säubern & finale Zeichenkette zusammensetzen
+                    const rawBase64 = orderedParts.join('').replace(/[^A-Za-z0-9+/=]/g, '');   
+                    const finalPayload = `P1/${totalExpected}#ZIP:${rawBase64}`;  
+
+                    console.log("Finaler Payload Länge:", finalPayload.length);  
+                    console.log("Erste 30 Zeichen:", finalPayload.substring(0, 30));  
+
+                    if (inputRaw) {  
+                        inputRaw.value = finalPayload;  
+                    }  
+
+                    // Dekodierung aufrufen
+                    if (typeof decodeAndPreview === 'function') {  
+                        decodeAndPreview();  
+                    } else if (typeof universalDecode === 'function') {  
+                        universalDecode();  
+                    }  
+                } 
+            } 
+
+        } else { 
+            const errorMsg = result.error || result.message || "Kein Tag erkannt"; 
+            if (statusDiv) { 
+                statusDiv.textContent = `⚠️ ${errorMsg}`; 
+                statusDiv.style.color = "#f59e0b"; 
+            } 
+        } 
+    } catch (e) { 
+        console.error("Fehler beim Abrufen vom NFC-Server:", e); 
+        if (statusDiv) { 
+            statusDiv.textContent = "❌ Server-Verbindungsfehler"; 
+            statusDiv.style.color = "#ef4444"; 
+        } 
+    } finally { 
+        // Button nur zurücksetzen, wenn die Schleife NICHT fortgesetzt wird
+        if (!shouldContinueReading && btnRead) { 
+            btnRead.disabled = false; 
+            btnRead.innerHTML = btnRead.getAttribute('data-orig-text') || originalBtnText; 
+        } 
+    } 
+
+    // Asynchroner Re-Entry ohne Stack-Accumulation
+    if (shouldContinueReading) {
+        setTimeout(readFromNfc, 300);
     }
 }
 
