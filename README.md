@@ -1,51 +1,3 @@
-🇬🇧 English Version
-
-# 🔬 MicroIMG
-
-> Ultra-low-capacity image compression & multi-chunk NFC transfer pipeline.
-
-**MicroIMG** is a specialized framework designed to compress images down to a few hundred bytes for storage on severely space-constrained NFC media (e.g., NTAG216 chips) while preserving clear PixelArt aesthetics. For higher-resolution images, MicroIMG automatically slices the payload into sequential chunks (`P1/N#ZIP:...`), allowing lossless multi-tag assembly right in the browser via a smooth, non-blocking hardware interface.
-
-## 🚀 Key Features
-
-* **Aggressive Data Compression:** Reduces image data to tiny payloads without losing essential PixelArt details.
-* **Smart Multi-Chunk Assembly:** Automatically splits larger payloads across multiple NFC tags and reconstructs them in the browser — regardless of the order in which the tags are scanned.
-* **Robust Format Normalization:** Automatically sanitizes, validates, and aligns incoming chunk headers (`P1/N#ZIP:...`), ensuring resilient decoding even when tags contain legacy or raw NDEF fragments.
-* **Non-Blocking Hardware Handshake:** Features thread-safe Python locking mechanisms and dedicated scan loops to protect PC/SC hardware and eliminate polling spam.
-* **Interruptible Workflow:** Includes client- and backend-side cancellation handling to gracefully abort pending scan loops at any time.
-
-## 🛠 Architecture & Workflow
-
-1. **Compression & Encoding:** Images are compressed into NDEF-compatible strings formatted with standardized chunk headers (`P1/N#ZIP:...`).
-2. **Python Bridge (Backend):** A lightweight Flask service using `pyscard` interfaces directly with PC/SC readers (e.g., ACR1252U), utilizing thread locks for safe hardware access and graceful cancellation.
-3. **Browser Engine (Frontend):** Manages guided multi-tag scanning, buffers raw chunks, provides visual status updates, and executes `decodeAndPreview()` or `universalDecode()` once the stream is full.
-
-## 💻 Tech Stack
-
-* **Frontend:** Modularized Vanilla JavaScript (ES6+, Async/Await), CSS3
-* **Backend Bridge:** Python 3, Flask, PySCard (PC/SC Wrapper)
-* **Hardware:** ACR1252U / NTAG216 NFC Chips
-
-## 📄 Format Specification
-
-Payloads are written across $N$ tags using structured headers:
-
-* **Tag 1:** `P1/3#ZIP:...` *(Contains sequence metadata, format identifiers, and initial Base64 payload)*
-* **Tag 2:** `P2/3#...` *(Payload chunk 2)*
-* **Tag 3:** `P3/3#...` *(Payload chunk 3)*
-
-During scanning, MicroIMG strips sequence headers from subsequent chunks, verifies Base64 integrity, enforces the `ZIP:` prefix on the primary segment, and reconstructs a single unified stream for decoding.
-
-## 📝 Recent Update Notes
-
-* **Clean Code & Modularization:** Completely refactored `index.html` by extracting all inline CSS and client-side JavaScript into clean, maintainable assets within `static/`.
-* **Cancellation Support:** Introduced a dedicated UI **"Cancel"** button tied to backend flag routines (`cancel_requested`), allowing instant cancellation of long-polling NFC read loops.
-* **GUI & UX Overhaul:** Refined visual feedback banners, progress counters, and integrated a custom retro pixel-art favicon.
-* **Backend & Hardware Locks:** Implemented `reader_lock` controls in Python to prevent concurrent hardware access collisions during active polling.
-* **Header & Regex Sanitization:** Overhauled chunk assembly logic in `script.js` to strictly enforce `P1/N#ZIP:` formatting, preventing missing colons or stripped characters from breaking image reconstruction.
-
----
-
 🇩🇪 Deutsche Version
 
 # 🔬 MicroIMG
@@ -61,6 +13,7 @@ During scanning, MicroIMG strips sequence headers from subsequent chunks, verifi
 * **Robuste Format-Normalisierung:** Automatische Säuberung und Bereinigung von Chunk-Headern (`P1/N#ZIP:...`), um auch bei Altlasten oder abweichenden Tag-Formaten eine fehlerfreie Rekonstruktion zu garantieren.
 * **Blockierungsfreier Hardware-Handshake:** Threadsichere Python-Sperrmechanismen und dedizierte Scan-Schleifen schonen den PC/SC-Reader und verhindern Polling-Spam.
 * **Steuerbarer Abbrech-Workflow:** Client- und backend-seitige Abbruch-Funktionen ermöglichen das jederzeitige, saubere Beenden laufender Lese-Schleifen.
+* **Mobil- & Termux-Kompatibilität:** Automatische Fallback-Logik für Umgebungen ohne physische Smartcard-Treiber (`pyscard`, z. B. unter Android via Termux). Bildverarbeitung, REST-API und GUI-Vorschau bleiben 100% nutzbar, während leserabhängige Endpunkte sauber einen `503 Service Unavailable`-Status liefern, statt das Backend abzustürzen.
 
 ## 🛠 Architektur & Ablauf
 
@@ -71,7 +24,7 @@ During scanning, MicroIMG strips sequence headers from subsequent chunks, verifi
 ## 💻 Tech-Stack
 
 * **Frontend:** Modulares Vanilla JavaScript (ES6+, Async/Await), CSS3
-* **Backend-Bridge:** Python 3, Flask, PySCard (PC/SC Wrapper)
+* **Backend-Bridge:** Python 3, Flask, PySCard (PC/SC Wrapper mit optionalem Termux-/Headless-Fallback)
 * **Hardware:** ACR1252U / NTAG216 NFC-Chips
 
 ## 📄 Format-Spezifikation
@@ -86,8 +39,59 @@ Beim Einlesevorgang entfernt MicroIMG die Folge-Header automatisch, säubert den
 
 ## 📝 Änderungsprotokoll (Update Notes)
 
+* **Termux- & Mobil-Fallback:** Integration von abgefangenen `smartcard`-Imports und Guard-Clauses für Hardware-Routen. Dadurch kann das Backend (zum Beispiel) in Termux gestartet werden, um Chunks zu generieren, APIs zu testen und die GUI zu nutzen, ohne abzustürzen.
 * **Clean Code & Modularisierung:** Vollständige Bereinigung der `index.html`. Sämtliche Styles und JS-Funktionen wurden sauber in Dateien unter `static/` ausgelagert.
 * **Abbruch-Funktion:** Einbau eines **"Abbruch"-Buttons** in der UI samt Backend-Anbindung (`cancel_requested`), um blockierende NFC-Schleifen sofort und kontrolliert zu beenden.
 * **GUI- & UX-Verbesserungen:** Überarbeitung der Statusmeldungen, Fortschrittsanzeigen und Einbindung eines eigens generierten PixelArt-Favicons.
 * **Backend- & Hardware-Locks:** Integration von `reader_lock` im Python-Backend zur Vermeidung von Thread-Kollisionen bei dauerhaftem Lese-Polling.
 * **Härtung der Parsing-Logik:** Überarbeitung der Regex- und Zusammenbau-Schleifen in `script.js` zur unumstößlichen Formatierung von `P1/N#ZIP:`, wodurch Parsing-Fehler und fehlende Zeichen beim Bild-Decode ausgeschlossen werden.
+
+---
+
+🇬🇧 English Version
+
+# 🔬 MicroIMG
+
+> Ultra-low-capacity image compression & multi-chunk NFC transfer pipeline.
+
+**MicroIMG** is a specialized framework designed to compress images down to a few hundred bytes for storage on severely space-constrained NFC media (e.g., NTAG216 chips) while preserving clear PixelArt aesthetics. For higher-resolution images, MicroIMG automatically slices the payload into sequential chunks (`P1/N#ZIP:...`), allowing lossless multi-tag assembly right in the browser via a smooth, non-blocking hardware interface.
+
+## 🚀 Key Features
+
+* **Aggressive Data Compression:** Reduces image data to tiny payloads without losing essential PixelArt details.
+* **Smart Multi-Chunk Assembly:** Automatically splits larger payloads across multiple NFC tags and reconstructs them in the browser — regardless of the order in which the tags are scanned.
+* **Robust Format Normalization:** Automatically sanitizes, validates, and aligns incoming chunk headers (`P1/N#ZIP:...`), ensuring resilient decoding even when tags contain legacy or raw NDEF fragments.
+* **Non-Blocking Hardware Handshake:** Features thread-safe Python locking mechanisms and dedicated scan loops to protect PC/SC hardware and eliminate polling spam.
+* **Interruptible Workflow:** Includes client- and backend-side cancellation handling to gracefully abort pending scan loops at any time.
+* **Mobile & Termux Compatibility:** Features an automatic fallback mode when physical smartcard drivers (`pyscard`) are unavailable (e.g., on Android via Termux). Image processing, REST API, and GUI preview remain 100% operational, while hardware-dependent write/read endpoints safely return a `503 Service Unavailable` status instead of crashing.
+
+## 🛠 Architecture & Workflow
+
+1. **Compression & Encoding:** Images are compressed into NDEF-compatible strings formatted with standardized chunk headers (`P1/N#ZIP:...`).
+2. **Python Bridge (Backend):** A lightweight Flask service using `pyscard` interfaces directly with PC/SC readers (e.g., ACR1252U), utilizing thread locks for safe hardware access and graceful cancellation.
+3. **Browser Engine (Frontend):** Manages guided multi-tag scanning, buffers raw chunks, provides visual status updates, and executes `decodeAndPreview()` or `universalDecode()` once the stream is full.
+
+## 💻 Tech Stack
+
+* **Frontend:** Modularized Vanilla JavaScript (ES6+, Async/Await), CSS3
+* **Backend Bridge:** Python 3, Flask, PySCard (PC/SC Wrapper with optional Headless/Termux Fallback)
+* **Hardware:** ACR1252U / NTAG216 NFC Chips
+
+## 📄 Format Specification
+
+Payloads are written across $N$ tags using structured headers:
+
+* **Tag 1:** `P1/3#ZIP:...` *(Contains sequence metadata, format identifiers, and initial Base64 payload)*
+* **Tag 2:** `P2/3#...` *(Payload chunk 2)*
+* **Tag 3:** `P3/3#...` *(Payload chunk 3)*
+
+During scanning, MicroIMG strips sequence headers from subsequent chunks, verifies Base64 integrity, enforces the `ZIP:` prefix on the primary segment, and reconstructs a single unified stream for decoding.
+
+## 📝 Recent Update Notes
+
+* **Termux & Mobile Fallback:** Added graceful `try...except` imports for `smartcard` and guard clauses on hardware endpoints, enabling mobile execution (for example) in Termux for chunk generation, API testing, and GUI previews without crashes.
+* **Clean Code & Modularization:** Completely refactored `index.html` by extracting all inline CSS and client-side JavaScript into clean, maintainable assets within `static/`.
+* **Cancellation Support:** Introduced a dedicated UI **"Cancel"** button tied to backend flag routines (`cancel_requested`), allowing instant cancellation of long-polling NFC read loops.
+* **GUI & UX Overhaul:** Refined visual feedback banners, progress counters, and integrated a custom retro pixel-art favicon.
+* **Backend & Hardware Locks:** Implemented `reader_lock` controls in Python to prevent concurrent hardware access collisions during active polling.
+* **Header & Regex Sanitization:** Overhauled chunk assembly logic in `script.js` to strictly enforce `P1/N#ZIP:` formatting, preventing missing colons or stripped characters from breaking image reconstruction.
