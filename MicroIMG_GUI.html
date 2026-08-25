@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MicroIMG</title>
-    <link rel="stylesheet" href="static/MicroIMG_stylesheet.css">
+    <link rel="stylesheet" href="static/stylesheet.css">
 	<link rel="icon" type="image/png" href="static/favicon.png">
 </head>
 <body data-theme="dark">
@@ -34,8 +34,8 @@
 					</select>
                 <label>Verfahren</label>
                 <div class="mode-container">
+					<button class="mode-btn btn-debug" id="btn-DEEP" onclick="setMode('DEEP')">DEEP-PX</button>
                     <button class="mode-btn" id="btn-G4" onclick="setMode('G4')">G4-RLE</button>
-                    <button class="mode-btn" id="btn-DEEP" onclick="setMode('DEEP')">DEEP-PX</button>
                     <button class="mode-btn active" id="btn-ZIP" onclick="setMode('ZIP')">ZIP-ULTRA</button>
                 </div>
                 <div style="display:flex; gap:10px;">
@@ -87,19 +87,20 @@
                     </optgroup>
                 </select>
                 <button class="btn-main btn-emerald" onclick="finalizeBatch()">BATCH GENERIEREN</button>
-                <button class="btn-main" style="background: #0ea5e9;" onclick="writeBatchToNfc()">NFC SEQUENCE WRITE 💾</button>
-				<button id="btnCancel" class="btn-main" style="display: none; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="cancelWrite()">❌ ABBRECHEN</button>
-                <div id="chunksContainer" class="chunk-grid"></div>
-            </div>
+				<button id="btnWrite" class="btn-main" style="background: #0ea5e9;" onclick="writeBatchToNfc()">NFC SEQUENCE WRITE 💾</button>
+				<button id="btnCancelWrite" class="btn-main" style="display: none; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="cancelNFCoperation()">❌ ABBRECHEN</button>
+				<div id="chunksContainer" class="chunk-grid"></div>
+				</div>
 
-            <div class="card">
-                <h2>🔍 RECOVERY</h2>
-                <button class="btn-main" style="background:#334155;" onclick="readFromNfc()">NFC SEQUENCE READ 📡</button>
-                <textarea id="inputRaw" style="margin-top:15px; height:60px;" placeholder="Code Paste..."></textarea>
-                <button class="btn-main btn-emerald" onclick="universalDecode()">START DECODE</button> 
-				<button class="btn-main btn-clear" onclick="clearDecode()">CLEAR</button>
-                <div id="rePreview" style="margin-top:20px; text-align:center;"></div>
-            </div>
+		<div class="card">
+			<h2>🔍 RECOVERY</h2>
+			<button id="btnRead" class="btn-main" style="background:#334155;" onclick="readFromNfc()">NFC SEQUENCE READ 📡</button>
+			<button id="btnCancelRead" class="btn-main" style="display: none; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="cancelNFCoperation()">❌ ABBRECHEN</button>
+			<textarea id="inputRaw" style="margin-top:15px; height:60px;" placeholder="Code Paste..."></textarea>
+			<button class="btn-main btn-emerald" onclick="universalDecode()">START DECODE</button> 
+			<button class="btn-main btn-clear" onclick="clearDecode()">CLEAR</button>
+			<div id="rePreview" style="margin-top:20px; text-align:center;"></div>
+			</div>
         </div>
     </div>
 </div>
