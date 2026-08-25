@@ -444,9 +444,8 @@ let isWriting = false;
 let currentAbortController = null;
 
 async function writeBatchToNfc() {
-    const btnWrite = document.getElementById('btnCancelWrite').style.display = 'inline-block';
-    const cancelBtn = document.getElementById('btnCancel');
-
+    const btnWrite = document.getElementById('btnWrite');
+	const cancelBtn = document.getElementById('btnCancelWrite');
     try {
         const code = await updateEngine();
         const cap = +document.getElementById('tagSelect').value - 15;
