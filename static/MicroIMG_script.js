@@ -231,12 +231,9 @@ async function updateEngine() {
 
     // 4. Glättung deaktivieren (hält das Bild beim Hochskalieren im UI scharf)
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-        ctx.imageSmoothingEnabled = false;
-        ctx.webkitImageSmoothingEnabled = false;
-    }
+    if (!ctx) return;
 
-    // Debug-Logs (zeigen die interne Auflösung und die CSS-Größe des Containers)
+    // Debug-Logs
     console.log("Canvas-Interne Größe:", canvas.width, canvas.height);
     console.log("Canvas-CSS-Größe:", canvas.style.width, canvas.style.height);
     console.log("Verhältnis X/Y:", (canvas.width / canvas.height).toFixed(4));
@@ -246,22 +243,67 @@ async function updateEngine() {
     const sX = (masterImg.width * (offsetX ?? 0.5)) - (sW / 2);
     const sY = (masterImg.height * (offsetY ?? 0.5)) - (sH / 2);
 
+    // 1. SCHRITT: Smoothing einschalten für sauberes Herunterskalieren des Originalbilds
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
     ctx.clearRect(0, 0, w, h);
     ctx.filter = `contrast(${con}%) grayscale(100%)`;
-    
     ctx.drawImage(masterImg, sX, sY, sW, sH, 0, 0, w, h);
+    ctx.filter = 'none';
     
-    const imgData = ctx.getImageData(0,0,w,h), d = imgData.data;
-    let pixels = [];
-    const step = 255 / (levels - 1); 
-    
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const step = 255 / (levels - 1);
+
+    // 1. Array für Graustufen aufbauen
+	const pixels = new Uint8Array(w * h);
+    let gray = new Float32Array(w * h);
     for (let i = 0; i < d.length; i += 4) {
-        let avg = (d[i] + d[i+1] + d[i+2]) / 3;
-        let level = Math.round(avg / step);
-        d[i] = d[i+1] = d[i+2] = Math.round(level * step);
-        pixels.push(level);
+        gray[i / 4] = d[i]; // Ist durch ctx.filter bereits grayscale
     }
-    ctx.putImageData(imgData,0,0);
+
+    // 2. Atkinson Dithering (Perfekt für kleine Gesichter & Augen!)
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const idx = y * w + x;
+            const oldVal = gray[idx];
+            
+            // Auf die nächste Quantisierungs-Stufe runden
+            const newVal = Math.round(oldVal / step) * step;
+            gray[idx] = newVal;
+
+            // Fehler berechnen
+            const err = (oldVal - newVal) / 8; // Atkinson verteilt nur 6/8 des Fehlers
+
+            // Fehler sanft auf die 6 Atkinson-Nachbarpixel verteilen
+            if (x + 1 < w) gray[idx + 1] += err;
+            if (x + 2 < w) gray[idx + 2] += err;
+            if (y + 1 < h) {
+                if (x - 1 >= 0) gray[(y + 1) * w + (x - 1)] += err;
+                gray[(y + 1) * w + x] += err;
+                if (x + 1 < w) gray[(y + 1) * w + (x + 1)] += err;
+            }
+            if (y + 2 < h) gray[(y + 2) * w + x] += err;
+        }
+    }
+	ctx.imageSmoothingEnabled = false;
+    ctx.webkitImageSmoothingEnabled = false;
+    // 3. Zurück ins ImageData-Array schreiben für die Canvas-Ausgabe
+    for (let i = 0; i < gray.length; i++) {
+        const val = Math.min(255, Math.max(0, gray[i]));
+        
+        // 1. Für den Canvas
+        const dIdx = i * 4;
+        d[dIdx] = val;
+        d[dIdx + 1] = val;
+        d[dIdx + 2] = val;
+
+        // 2. WICHTIG: Das 'pixels'-Array befüllen! (Rechnet Farbwert 0..255 in Stufe 0..levels-1 um)
+        pixels[i] = Math.min(levels - 1, Math.max(0, Math.round(val / step)));
+    }
+    
+    ctx.putImageData(imgData, 0, 0);
     
     let code = "";
     if(currentMode === 'ZIP') {
@@ -278,17 +320,37 @@ async function updateEngine() {
         code = `DP:W${w}H${h}:${pixels.map(x=>x.toString(16)).join('').toUpperCase()}`;
     }
 
-    const numTags = Math.ceil(code.length / cap);
+    // 1. Echte Byte-Länge des Strings im UTF-8 Format messen
+    const totalBytes = new TextEncoder().encode(code).length;
+
+    // 2. Präfix-Länge dynamisch ermitteln (Start mit 1 Tag -> "P1/1#" = 5 Bytes)
+    let numTags = 1;
+    let prefixLen = `P1/1#`.length; // 5 Bytes
+    let netCap = cap - prefixLen;
+
+    // Passt es nicht in 1 Tag, rechnen wir mit dem Puffer für mehrstellige Tags
+    if (totalBytes > netCap) {
+        // Schätzung für z. B. "P10/10#" -> 7 Bytes
+        prefixLen = 7; 
+        netCap = cap - prefixLen;
+        numTags = Math.ceil(totalBytes / netCap);
+        
+        // Exakt nachjustieren mit den echten Tag-Zahlen (z.B. "P1/2#" vs "P12/12#")
+        prefixLen = `P${numTags}/${numTags}#`.length;
+        netCap = cap - prefixLen;
+        numTags = Math.ceil(totalBytes / netCap);
+    }
+
     const tagText = numTags === 1 ? "TAG" : "TAGS";
-    
     const hue = Math.max(0, 140 - (numTags * 15)); 
     const statsColor = `hsl(${hue}, 80%, 50%)`;
 
     document.getElementById('liveStats').innerHTML = `
-        <b>${w}x${h}px</b> | ${code.length} B | 
+        <b>${w}x${h}px</b> | ${totalBytes} B | 
         <span style="color: ${statsColor}; font-weight: 900; transition: color 0.3s;">
             ${numTags} ${tagText}
         </span>`;
+
     return code;
 }
 
@@ -413,19 +475,35 @@ async function finalizeBatch() {
     accordionWrapper.id = "accordionWrapper";
     accordionWrapper.className = "accordion-content";
     
-    for (let j = 0, i = 1; j < code.length; j += cap, i++) {
-        let c = code.substring(j, j + cap);
-        let chunkData = `P${i}/${numTags}#${c}`;
-        
-        accordionWrapper.innerHTML += `
-            <div class="chunk-card">
-                <div style="display:flex; justify-content:space-between; color:var(--primary); margin-bottom:5px;">
-                    <span>TAG ${i}/${numTags}</span>
-                    <button onclick="copyToClipboard('${chunkData}')" style="font-size:0.6rem; cursor:pointer; background:var(--primary); border:none; color:white; border-radius:4px; padding:2px 6px;">COPY</button>
-                </div>
-                <div style="font-family:monospace; font-size:0.55rem; word-break:break-all; opacity:0.7;">${chunkData}</div>
-            </div>`;
-    }
+    let j = 0;
+	let i = 1;
+
+	while (j < code.length) {
+    // 1. Präfix bauen, um dessen exakte Zeichenlänge zu kennen
+		const prefix = `P${i}/${numTags}#`;
+    
+    // 2. Nutzbarkeit pro Tag: Maximale Kapazität minus Header-Länge
+		const netCap = cap - prefix.length;
+    
+    // 3. Exakt passende Payload für diesen Tag herausschneiden
+		const c = code.substring(j, j + netCap);
+		const chunkData = `${prefix}${c}`;
+    
+    // Index um die verbrauchte Netto-Länge weiterschieben
+		j += netCap;
+
+    // 4. Chunk im DOM anzeigen
+		accordionWrapper.innerHTML += `
+			<div class="chunk-card">
+				<div style="display:flex; justify-content:space-between; color:var(--primary); margin-bottom:5px;">
+					<span>TAG ${i}/${numTags}</span>
+					<button onclick="copyToClipboard('${chunkData}')" style="font-size:0.6rem; cursor:pointer; background:var(--primary); border:none; color:white; border-radius:4px; padding:2px 6px;">COPY</button>
+				</div>
+				<div style="font-family:monospace; font-size:0.55rem; word-break:break-all; opacity:0.7;">${chunkData}</div>
+			</div>`;
+    
+		i++;
+	}
     
     container.appendChild(accordionWrapper);
 
