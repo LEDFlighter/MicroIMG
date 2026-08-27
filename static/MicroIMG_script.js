@@ -12,17 +12,17 @@ function toggleTheme() {
     document.body.classList.toggle('light-theme');
 }
 
-function setMode(m) {
-    currentMode = m;
-    const btnZip = document.getElementById('btn-ZIP');
-    const btnG4 = document.getElementById('btn-G4');
-    const btnDP = document.getElementById('btn-DP');
+function setMode(m) { 
+    currentMode = m; 
+    const btnZip = document.getElementById('btn-ZIP'); 
+    const btnG4 = document.getElementById('btn-G4'); 
+    const btnDP = document.getElementById('btn-DP'); 
 
-    if (btnZip) btnZip.classList.toggle('active', m === 'ZIP');
-    if (btnG4) btnG4.classList.toggle('active', m === 'G4');
-    if (btnDP) btnDP.classList.toggle('active', m === 'DP');
+    if (btnZip) btnZip.classList.toggle('active', m === 'ZIP'); 
+    if (btnG4) btnG4.classList.toggle('active', m === 'G4'); 
+    if (btnDP) btnDP.classList.toggle('active', m === 'DP'); 
 
-    updateEngine();
+    updateEngine(); 
 }
 
 function setOrientation(o) {
