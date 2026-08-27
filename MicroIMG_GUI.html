@@ -38,6 +38,12 @@
 					<button class="mode-btn" id="btn-G4" onclick="setMode('G4')">G4-RLE</button> 
 					<button class="mode-btn active" id="btn-ZIP" onclick="setMode('ZIP')">ZIP-ULTRA</button> 
 				</div>
+				<label for="ditherSelect">Dithering:</label>
+					<select id="ditherSelect" onchange="updateEngine()">
+						<option value="atkinson" selected>Atkinson (Beste Details)</option>
+						<option value="floyd">Floyd-Steinberg (Weich)</option>
+						<option value="none">Keins (Maximale Kompression)</option>
+				</select>
                 <div style="display:flex; gap:10px;">
                     <button id="fmt-landscape" class="mode-btn active" style="flex:1; border:1px solid var(--border);" onclick="setOrientation('landscape')">QUER ↔️</button>
                     <button id="fmt-portrait" class="mode-btn" style="flex:1; border:1px solid var(--border);" onclick="setOrientation('portrait')">HOCH ↕️</button>
