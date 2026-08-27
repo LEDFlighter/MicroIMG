@@ -263,30 +263,45 @@ async function updateEngine() {
         gray[i / 4] = d[i]; // Ist durch ctx.filter bereits grayscale
     }
 
-    // 2. Atkinson Dithering (Perfekt für kleine Gesichter & Augen!)
-    for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-            const idx = y * w + x;
-            const oldVal = gray[idx];
-            
-            // Auf die nächste Quantisierungs-Stufe runden
-            const newVal = Math.round(oldVal / step) * step;
-            gray[idx] = newVal;
+    // Dithering-Modus auslesen
+	const ditherMode = document.getElementById('ditherSelect')?.value || 'atkinson';
 
-            // Fehler berechnen
-            const err = (oldVal - newVal) / 8; // Atkinson verteilt nur 6/8 des Fehlers
+	// 2. Quantisierung & Dithering ausführen
+	for (let y = 0; y < h; y++) {
+		for (let x = 0; x < w; x++) {
+			const idx = y * w + x;
+			const oldVal = gray[idx];
+        
+			// Auf die nächste Quantisierungs-Stufe runden
+			const newVal = Math.round(oldVal / step) * step;
+			gray[idx] = newVal;
 
-            // Fehler sanft auf die 6 Atkinson-Nachbarpixel verteilen
-            if (x + 1 < w) gray[idx + 1] += err;
-            if (x + 2 < w) gray[idx + 2] += err;
-            if (y + 1 < h) {
-                if (x - 1 >= 0) gray[(y + 1) * w + (x - 1)] += err;
-                gray[(y + 1) * w + x] += err;
-                if (x + 1 < w) gray[(y + 1) * w + (x + 1)] += err;
-            }
-            if (y + 2 < h) gray[(y + 2) * w + x] += err;
-        }
-    }
+			const err = oldVal - newVal;
+
+			if (ditherMode === 'atkinson') {
+				// Atkinson: Verteilt nur 6/8 (75%) des Fehlers
+				const e = err / 8;
+				if (x + 1 < w) gray[idx + 1] += e;
+				if (x + 2 < w) gray[idx + 2] += e;
+				if (y + 1 < h) {
+					if (x - 1 >= 0) gray[(y + 1) * w + (x - 1)] += e;
+					gray[(y + 1) * w + x] += e;
+					if (x + 1 < w) gray[(y + 1) * w + (x + 1)] += e;
+				}
+				if (y + 2 < h) gray[(y + 2) * w + x] += e;
+
+			} else if (ditherMode === 'floyd') {
+				// Floyd-Steinberg: Verteilt 100% des Fehlers (16/16)
+				if (x + 1 < w)                 gray[idx + 1]       += err * (7 / 16);
+				if (y + 1 < h && x - 1 >= 0)   gray[(y + 1)*w + x - 1] += err * (3 / 16);
+				if (y + 1 < h)                 gray[(y + 1)*w + x]   += err * (5 / 16);
+				if (y + 1 < h && x + 1 < w)   gray[(y + 1)*w + x + 1] += err * (1 / 16);
+
+			} else if (ditherMode === 'none') {
+				// Kein Dithering: Fehler wird komplett ignoriert
+			}
+		}
+	}
 	ctx.imageSmoothingEnabled = false;
     ctx.webkitImageSmoothingEnabled = false;
     // 3. Zurück ins ImageData-Array schreiben für die Canvas-Ausgabe
