@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data: content:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="theme-color" content="#0b0f1a">
+    <title>MicroIMG</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="pako.js" defer></script>
+    <script src="codec.js" defer></script>
+    <script src="app.js" defer></script>
+</head>
+<body>
+<header>
+    <div class="brand">Micro <span>IMG</span><small>ANDROID 1.2</small></div>
+    <div class="headerActions"><button id="theme" class="textButton" aria-label="Helles oder dunkles Design umschalten">◐ Theme</button><button id="hardware" class="chip" aria-label="NFC-Status und Einstellungen">NFC …</button></div>
+</header>
+<nav aria-label="Arbeitsbereich"><button id="createTab" class="active" aria-selected="true">Bild → Text</button><button id="readTab" aria-selected="false">Text → Bild</button></nav>
+<main>
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <section id="createPanel" aria-label="Bild komprimieren oder MicroIMG importieren">
+        <fieldset id="editor">
+            <div class="card settings">
+                <h1>⚙ Core Settings</h1>
+                <label>Bildquelle</label>
+                <div class="twoColumns sourceActions">
+                    <label class="fileButton" for="imageInput"><strong>Bilddatei öffnen</strong><small>PNG, JPEG, WebP …</small><input id="imageInput" type="file" accept="image/*"></label>
+                    <button id="openImport" type="button" class="fileButton importButton"><strong>MicroIMG importieren</strong><small>Text einfügen</small></button>
+                </div>
+                <p id="sourceInfo" class="hint">Bilddatei öffnen oder MicroIMG-Text zum Schreiben einfügen.</p>
+                <fieldset id="imageSettings">
+                    <div class="twoColumns"><label>Max. Auflösung<select id="resolution"><option value="16">16 px</option><option value="32">32 px</option><option value="48">48 px</option><option value="64" selected>64 px</option><option value="128">128 px</option><option value="256">256 px</option><option value="512">512 px</option><option value="1024">1024 px</option></select></label><div><label for="levels">Graustufen <output id="levelsValue">16</output></label><input type="range" id="levels" min="2" max="16" step="1" value="16"></div></div>
+                    <label>Verfahren</label>
+                    <div class="modeButtons" aria-label="Komprimierung"><button type="button" data-format="DP" aria-pressed="false">DEEP-PX</button><button type="button" data-format="G4" aria-pressed="false">G4-RLE</button><button type="button" data-format="ZIP" class="active" aria-pressed="true">ZIP-ULTRA</button></div>
+                    <select id="format" aria-label="Komprimierungsformat" hidden><option value="ZIP">ZIP-Ultra</option><option value="G4">G4-RLE</option><option value="DP">Deep-PX</option></select>
+                    <div class="ditherRow"><label>Dithering<select id="dither"><option value="atkinson">Atkinson · beste Details</option><option value="floyd">Floyd-Steinberg · weich</option><option value="none">Keins · maximale Kompression</option></select></label><button id="rotate" type="button" class="secondary">↻ Drehen</button></div>
+                    <div class="twoColumns"><div><label for="contrast">Kontrast <output id="contrastValue">100 %</output></label><input type="range" id="contrast" min="50" max="400" value="100" step="5"></div><div><label for="zoom">Zoom <output id="zoomValue">1,0 ×</output></label><input type="range" id="zoom" min="100" max="1600" value="100" step="5"></div></div>
+                </fieldset>
+                <div class="monitor">
+                    <div class="stats" aria-live="polite"><div><strong id="pixelStat">—</strong><span>PIXEL</span></div><div><strong id="byteStat">—</strong><span>BYTE</span></div><div><strong id="tagStat">—</strong><span>TAGS</span></div></div>
+                    <div class="preview" id="previewFrame"><canvas id="preview" width="64" height="48" aria-label="Komprimierte Bildvorschau" hidden></canvas><div id="emptyPreview"><span class="pixelIcon">▦</span><p>Warte auf Bild …</p><button id="demo" class="textButton" type="button">Beispielbild laden</button></div></div>
+                    <p class="hint" id="gestureHint" hidden>Mit zwei Fingern zoomen · Zum Verschieben ziehen</p>
+                </div>
+            </div>
+            <div class="card batch">
+                <h2>▣ Batch &amp; NFC</h2>
+                <label>Ziel-Hardware<select id="capacity"><option value="41">NTAG210 · 41 Byte NDEF</option><option value="121">NTAG212 · 121 Byte NDEF</option><option value="137">NTAG213 · 137 Byte NDEF</option><option value="492">NTAG215 · 492 Byte NDEF</option><option value="868" selected>NTAG216 · 868 Byte NDEF</option><option value="custom">Andere NDEF-Kapazität …</option></select></label>
+                <label id="customCapacityLabel" hidden>NDEF-Kapazität in Byte<input type="number" id="customCapacity" value="2000" min="32" max="65536" inputmode="numeric"></label>
+                <p class="hint">Der tatsächliche Speicher wird vor jedem Schreiben geprüft.</p>
+                <div class="actions"><button id="write" class="primary nfcWrite" disabled>NFC · Auf Tags schreiben</button><div class="twoColumns"><button id="exportChunks" class="primary" disabled>Codes exportieren</button><button id="exportPreview" class="secondary" disabled>PNG speichern</button></div></div>
+                <details id="chunkDetails" hidden><summary id="chunkSummary">Tag-Codes</summary><div id="chunkList"></div><button id="copyChunks" class="secondary">Alle Codes kopieren</button></details>
+            </div>
+        </fieldset>
+    </section>
+    <section id="readPanel" aria-label="Bild von NFC-Tags lesen" hidden>
+        <div class="card scanCard"><h1>⌕ Recovery</h1><p>Alle Tags eines Bildes einlesen – in beliebiger Reihenfolge.</p><button id="read" class="primary nfcRead">NFC · Tags lesen</button><p class="hint">Tag ruhig an die NFC-Antenne auf der Rückseite des Smartphones halten.</p></div>
+        <div id="readProgress" class="card" hidden><strong id="readCount"></strong><progress id="readMeter" value="0" max="1"></progress><p id="missing" class="hint"></p></div>
+        <div id="decodedCard" class="card" hidden><div class="sectionTitle"><h2>Rekonstruktion erfolgreich</h2><span id="decodedSize" class="chip"></span></div><div class="preview decoded"><canvas id="decoded" aria-label="Wiederhergestelltes Bild"></canvas></div><button id="saveDecoded" class="primary">Bild als PNG speichern</button></div>
+        <details class="card" id="manualDetails" open><summary>Codes einfügen &amp; rekonstruieren</summary><label for="raw">Ein Chunk pro Zeile oder ein kompletter ZIP-, G4- oder DP-Code</label><textarea id="raw" rows="5" placeholder="P1/2#ZIP:…&#10;P2/2#…" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea><button id="decode" class="primary">Start Decode</button></details>
+        <button id="reset" class="secondary danger">Gesammelte Tags zurücksetzen</button>
+        <p class="hint">Nur Tags desselben Bildes sammeln. Das MicroIMG-Format enthält keine eindeutige Bild-ID.</p>
+    </section>
+    <footer>MicroIMG · Android 1.2.1 · Offline</footer>
+</main>
+<aside id="operation" class="operation" aria-live="polite" hidden><div><strong id="operationTitle">NFC bereit</strong><p id="operationMessage"></p><progress id="writeMeter" max="1" value="0" hidden></progress></div><button id="cancel" class="secondary danger">Abbrechen</button></aside>
+<div id="confirm" class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden><div class="card"><h2 id="confirmTitle">Auf NFC-Tags schreiben</h2><p id="confirmSummary"></p><p>Vorhandene Daten auf den angehaltenen Tags werden ersetzt. Jeder Tag wird nach dem Schreiben gelesen und geprüft.</p><div class="twoColumns"><button id="dismissConfirm" class="secondary">Zurück</button><button id="confirmWrite" class="primary nfcWrite">Starten</button></div></div></div>
+<div id="codeImport" class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle" hidden><div class="card"><h2 id="importTitle">MicroIMG-Text importieren</h2><button id="pasteImport" class="secondary">Aus Zwischenablage</button><label for="codeText">MicroIMG-Code</label><textarea id="codeText" rows="6" maxlength="3000000" placeholder="P1/1#ZIP:…" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea><p class="hint">ZIP-, G4- oder DP-Code oder alle Tag-Chunks eines Bildes. Text einfügen und mit „Importieren“ übernehmen.</p><p id="importError" class="dialogError" role="alert" hidden></p><div class="twoColumns"><button id="dismissImport" class="secondary">Abbrechen</button><button id="applyImport" class="primary">Importieren</button></div></div></div>
+<div id="pngExport" class="modal" role="dialog" aria-modal="true" aria-labelledby="exportTitle" hidden><div class="card"><h2 id="exportTitle">PNG exportieren</h2><label for="exportScale">Skalierungsfaktor</label><input id="exportScale" type="number" min="1" step="1" value="8" inputmode="numeric"><p id="exportSize" aria-live="polite"></p><p id="exportHint" class="hint"></p><p id="exportError" class="dialogError" role="alert" hidden></p><div class="twoColumns"><button id="dismissExport" class="secondary">Abbrechen</button><button id="confirmExport" class="primary">Speichern</button></div></div></div>
+</body>
+</html>

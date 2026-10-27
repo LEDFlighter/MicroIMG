@@ -1,0 +1,36 @@
+plugins {
+    id 'com.android.application'
+}
+android {
+    namespace 'io.github.ledflighter.microimg'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'io.github.ledflighter.microimg'
+        minSdk 26
+        targetSdk 36
+        versionCode 4
+        versionName '1.2.1'
+        testInstrumentationRunner 'io.github.ledflighter.microimg.SmokeInstrumentation'
+    }
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('MICROIMG_KEYSTORE') ?: '../signing/microimg-release.jks')
+            storePassword System.getenv('MICROIMG_STORE_PASSWORD') ?: 'microimg-local'
+            keyAlias 'microimg'
+            keyPassword System.getenv('MICROIMG_KEY_PASSWORD') ?: 'microimg-local'
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint {
+        abortOnError true
+    }
+}
